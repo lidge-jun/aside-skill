@@ -79,3 +79,80 @@ with `aside account list`.
 The skill was built against CLI `1.26.810.1915` and daemon `1.26.829.1514` on
 macOS. Offsets cited in the research notes are build-specific; the behavioral rules
 are not.
+
+## Install for other agents
+
+The skill is a plain `SKILL.md` plus supporting files, which is the same shape
+Claude Code uses, so most agents take it with a copy.
+
+### Claude Code
+
+Personal skills live in `~/.claude/skills/<skill-name>/SKILL.md`, and the
+**directory name becomes the slash command**:
+
+```bash
+git clone https://github.com/lidge-jun/aside-skill.git
+cp -R aside-skill/aside-jun ~/.claude/skills/aside-jun
+```
+
+Verify with `/skills` inside Claude Code, then invoke it as `/aside-jun`. Claude
+Code also picks it up automatically when a request matches the `description`.
+
+Claude Code watches `~/.claude/skills/` and usually notices edits during a
+session, but if you created the top-level directory after starting Claude Code,
+restart the session. For a project-only install use
+`<project>/.claude/skills/aside-jun/SKILL.md` instead. Remove it by deleting the
+directory.
+
+No conversion is needed: this skill's frontmatter is already `name` +
+`description`, and its `references/` and `scripts/` directories are exactly the
+supporting-file layout Claude Code expects.
+
+See [Extend Claude with skills](https://code.claude.com/docs/en/skills).
+
+### Cursor
+
+Cursor does not read `SKILL.md`. It uses **project rules** in `.cursor/rules/`, and
+the file must be `.mdc` — a plain `.md` in that directory is ignored. The
+frontmatter keys differ too: Cursor takes `description`, `globs`, and
+`alwaysApply`.
+
+Convert with:
+
+```bash
+mkdir -p .cursor/rules
+{
+  echo '---'
+  echo 'description: "Drive the Aside browser CLI for authenticated web work without hanging it"'
+  echo 'alwaysApply: false'
+  echo '---'
+  echo
+  sed '1{/^---$/!q;};1,/^---$/d' aside-jun/SKILL.md
+} > .cursor/rules/aside-jun.mdc
+```
+
+That strips this repo's YAML header and writes Cursor's. With `description` set and
+`alwaysApply: false`, Cursor's agent decides when the rule is relevant. Set
+`alwaysApply: true` to include it in every session, or add
+`globs: "..."` to attach it only when matching files are in context. With no
+activation field at all it becomes a manual rule you invoke as `@aside-jun`.
+
+One caveat: the relative links to `references/` will not resolve from
+`.cursor/rules/`. Either copy `references/` alongside the rule, or accept that the
+entrypoint is self-contained enough for most work.
+
+See [Cursor Rules](https://cursor.com/docs/rules).
+
+### Codex
+
+```bash
+cp -R aside-jun ~/.codex/skills/aside-jun
+```
+
+Or `"$CODEX_HOME/skills/aside-jun"` when that variable is set.
+
+### A note on plugins
+
+A skill is a capability; a plugin marketplace is a distribution mechanism. This
+repository is a standalone skill, installed by copying a directory. It is not a
+Claude Code plugin marketplace, so there is nothing to `/plugin install` here.
