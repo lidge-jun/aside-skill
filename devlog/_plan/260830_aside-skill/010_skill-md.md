@@ -52,11 +52,21 @@ or anything requiring the GUI.
 
 ## Audit amendments (round 1)
 
-- **Host deadline is mandatory.** Every exec example in SKILL.md uses
-  `timeout 300 aside exec`. The body states that a fired timeout means the run is
-  dead, no artifact was written, and the same prompt will hang again, so the fix is
-  the prompt rather than a retry. The parked Aside session needs no cleanup and must
-  not be resumed with `--session`.
+- **Host deadline is mandatory.** Every exec example uses `timeout 300 aside exec`.
+  The body is explicit that a fired timeout kills the CLI but not the work already
+  done: completed writes, downloads, submissions and messages persist, so the real
+  state must be inspected before retrying or a rerun duplicates a side effect. The
+  Aside session survives as `status: suspended` with `suspension.kind` of
+  `approval` or `ask-user-question` and accumulates rather than clearing itself;
+  resuming it with `--session` is forbidden. These sessions are `ephemeral` and
+  therefore invisible to `aside.sessions.list()`, which reports zero while several
+  are parked, so SKILL.md documents a read-only `state.db` query instead. Whether a
+  hidden ephemeral session can be answered in the Aside UI is unconfirmed and must
+  not be asserted.
+- **Account scope is fixed to u0.** `--account` is omitted from the options list
+  because every clause hardcodes `~/.aside/u/0/`; the body explains that another
+  account moves the root and invalidates the clauses, and the troubleshooting entry
+  requires rewriting the root before running anything.
 - **The three clauses are literal.** SKILL.md carries them verbatim in a `text`
   block and again inside an assembled example. The read clause explicitly forbids
   `~/Documents` and every other local path, because guard technically allows those

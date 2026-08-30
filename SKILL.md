@@ -36,10 +36,34 @@ from outside.
 timeout 300 aside exec "<prompt>"
 ```
 
-Without it, a hung run holds the shell indefinitely. When the timeout fires the run
-is finished: nothing was written, and re-running the same prompt will hang again.
-Fix the prompt rather than retrying. The suspended session stays parked inside
-Aside and needs no cleanup, but do not try to continue it with `--session`.
+Without it, a hung run holds the shell indefinitely.
+
+A fired timeout kills the CLI, not the work already done. Everything the agent
+completed before it suspended still happened: files written inside the allowed
+roots, downloads, form submissions, messages sent. **Inspect the real state before
+retrying**, or a rerun duplicates a side effect. The only thing that certainly did
+not happen is the suspended call itself.
+
+The Aside session survives as `status: suspended`, with `suspension.kind` of
+`approval` or `ask-user-question`. It waits for a human who never arrives from a
+CLI, so these accumulate rather than clearing themselves. Do not resume one with
+`--session` expecting it to continue.
+
+They are also invisible to the ordinary session API: CLI runs are created
+`ephemeral`, and `aside.sessions.list()` returns only visible sessions, so it
+reports zero while several are parked. Read the database directly instead:
+
+```bash
+python3 -c "import sqlite3,json;c=sqlite3.connect('file:$HOME/.aside/u/0/state.db?mode=ro',uri=True);\
+print([(r[0], json.loads(r[1])['kind']) for r in c.execute(\
+\"select id,suspension from sessions where status='suspended'\")])"
+```
+
+Treat that count as a hygiene signal: a growing list means prompts are still
+tripping the approval path. Whether a hidden ephemeral session can be answered in
+the Aside UI is unconfirmed, so do not rely on clearing them that way.
+
+Retrying the same prompt hangs the same way, so fix the prompt instead.
 
 Read [references/permissions.md](references/permissions.md) when you need the
 underlying mechanism, want to confirm whether a path is inside the allowed roots,
@@ -111,9 +135,15 @@ write_stdin   session_id=<id>  chars=""  yield_time_ms=120000
 Empty `chars` polls without typing. If output stops right after a tool-call line
 and stays stopped, that is a hang rather than slow work.
 
-Useful options: `--session <id>` continues a healthy run, `--account <id>` picks an
-account, and `--effort ultrabrowse` enables proactive mode for flows that must
-recover from surprises on their own.
+Useful options: `--session <id>` continues a healthy run, and
+`--effort ultrabrowse` enables proactive mode for flows that must recover from
+surprises on their own.
+
+Account selection is deliberately missing from that list. Every path rule here is
+written for account `u0`, whose root is `~/.aside/u/0/`. Another account moves the
+root to `~/.aside/u/<n>/` and silently invalidates the clauses, turning the safe
+path into an outside path that suspends. If another account is genuinely needed,
+substitute its root everywhere in the clauses first.
 
 ## repl
 
@@ -192,8 +222,10 @@ calls. Check what is configured with `aside repl "console.log(JSON.stringify(asi
 initialize over stdio; it is meant to be driven by an MCP client, not probed by
 hand.
 
-**Wrong account.** `aside account list` shows which is signed in, and
-`aside account use <id>` switches.
+**Wrong account.** `aside account list` shows which is signed in. If you switch
+with `aside account use <id>`, re-confirm with `aside account list` and rewrite
+every `~/.aside/u/0/` in your clauses to the new account's root before running
+anything, or each prompt now points outside the allowed roots.
 
 ## Boundaries
 
