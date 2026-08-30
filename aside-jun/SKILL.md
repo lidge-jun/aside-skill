@@ -198,6 +198,14 @@ Useful options: `--session <id>` continues a healthy run, and
 `--effort ultrabrowse` enables proactive mode for flows that must recover from
 surprises on their own.
 
+`--session` only works for about 15 minutes. CLI sessions are created ephemeral
+and the daemon purges them after that, so a later resume fails with
+`Session is pending purge`. For anything scheduled or long-running, carry state in
+files under `~/.aside/u/0/` instead of threading a session, and let Aside's own
+memory store hold what is generally true. See
+[references/scheduling.md](references/scheduling.md) before putting `exec` in cron
+or a LaunchAgent.
+
 Account selection is deliberately missing from that list. Every path rule here is
 written for account `u0`, whose root is `~/.aside/u/0/`. Another account moves the
 root to `~/.aside/u/<n>/` and silently invalidates the clauses, turning the safe
