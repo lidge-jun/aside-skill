@@ -227,6 +227,10 @@ Refs go stale as soon as the DOM moves, so snapshot again after acting instead o
 reusing an old `e12`. When refs cannot target something, such as canvas, drag
 handles, or map pins, fall back to `cua` coordinates.
 
+A passkey prompt is usually a fork rather than a wall. Most sites keep a password
+fallback behind "Try another way", and an exec agent can take it and finish the
+sign-in on its own. Say so in the prompt instead of treating passkeys as fatal.
+
 Full surface: [references/repl-api.md](references/repl-api.md).
 
 ## What Aside already knows

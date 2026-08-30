@@ -135,3 +135,48 @@ have the user sign in once in the Aside window so `exec` inherits a live session
 Sign in once, by hand, in the Aside window. Then delegate. `exec` inheriting a live
 session never has to touch a credential, which removes the whole class of prompts
 that hang a run.
+
+## Two runs worth learning from
+
+Both were real `aside exec` runs against a live browser. Account addresses are
+masked here; use your own.
+
+### It stopped instead of hanging
+
+The task began with "unlock the Apple Passwords vault." The agent planned five
+steps, called `requestAuth()`, and met the macOS 6-digit prompt. It then ended the
+run in 27 seconds with exit 0:
+
+> "The vault unlock step failed because a 6-digit PIN prompt appeared on macOS
+> that I cannot complete myself. I reported exactly what appeared and stopped."
+
+Without the no-questions clause the agent would have called
+`ask_user_question` and the run would have sat silent until the shell timeout.
+The clause converted an unrecoverable hang into a clean, informative failure.
+
+### It routed around a passkey by itself
+
+The task was to sign out of one Google account and sign in with another. Google
+presented a passkey prompt, which an agent cannot satisfy. Rather than stopping,
+the agent chose **Try another way** and then **Enter your password**, pulled the
+saved credential from the password manager, and completed the sign-in. It then
+confirmed the new account from the account menu and captured the inbox.
+
+Two lessons. A passkey prompt is often a fork rather than a wall, because most
+sites keep a password fallback; instruct the agent to look for one before treating
+passkeys as fatal. And the "pick the most reasonable option and continue" half of
+the clause is doing real work here: the same sentence that prevents questions also
+authorizes the detour.
+
+### The bash rule held
+
+Asked to save a screenshot under `~/.aside/u/0/`, the agent captured into the
+session tmp directory and then moved the file with `bash` `cp` rather than
+`write_file`. That is the file-tool rule behaving correctly on a path the file
+tools should not touch.
+
+### Model selection
+
+The second run used no `-m` flag and picked up the account's configured default.
+Omitting the model is the working default; reach for `-m` only when the configured
+default is broken.
