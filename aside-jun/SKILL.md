@@ -26,6 +26,19 @@ Three ways to cause it, all observed:
 | Reading outside the allowed roots | Hangs the same way. Reads are not safer than writes. |
 | Asking the user anything | Hangs. The question renders, then nothing. |
 
+That applies to the file tools, `read_file`, `write_file`, and `edit_file`. They go
+through a permission check that can suspend.
+
+`bash` does not. It runs under a separate `sandbox-exec` Seatbelt profile that
+denies rather than asks, so a blocked path returns
+`Operation not permitted` on stderr immediately and the run continues. That makes
+`bash` the safe tool for touching an uncertain path, but it is not a permission
+bypass: the Seatbelt profile has its own boundary. In one probe `head` on a
+workspace file was denied outright while `/etc/hosts` was read and `/tmp` was
+written in the same command.
+
+So when a task must touch a path you are not certain about, instruct the agent to
+use `bash` rather than `read_file`. A denial you can see beats a silent deadlock.
 No flag prevents this. There is no `--yes`, no auto-deny, no timeout option.
 Prevention lives in two places: the prompt you write, and a deadline you impose
 from outside.

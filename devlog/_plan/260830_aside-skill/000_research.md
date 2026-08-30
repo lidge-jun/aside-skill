@@ -255,3 +255,29 @@ The repl jail check is cheap and safe to re-run:
 ```bash
 aside repl "try{fs.resolvePath('/etc/passwd')}catch(e){console.log(e.message)}"
 ```
+
+## 10. Correction: bash is not permission-gated
+
+A later probe round revised section 2. The daemon's `FILE_TOOL_CALLS` map contains
+only `read_file`, `edit_file`, and `write_file`; `bash` is not in it and therefore
+never reaches the `ask` verdict that suspends.
+
+```bash
+D="$HOME/Library/Application Support/Aside/AsideDaemon/mac-arm64/1.26.829.1514/Aside Daemon.app/Contents/MacOS/aside-daemon"
+rg -aUo -m1 'FILE_TOOL_CALLS=.{0,220}' "$D"
+rg -aUo -m1 'sandbox-exec.{0,300}' "$D"    # -> SEATBELT_BASE_POLICY=`(version 1) ...
+```
+
+`bash` is instead confined by `sandbox-exec` with a Seatbelt profile, which denies
+instead of asking. Measured with both root lists empty, a single bash command was
+denied on a workspace path (`Operation not permitted` on stderr) while
+simultaneously reading `/etc/hosts` and writing `/tmp`, and the run completed
+normally rather than hanging.
+
+The repl surface confirms the split from the other direction: `fs.resolvePath`,
+`fetch('file://...')`, and `openTab('file://...')` all fail fast, the last with
+"Cannot navigate to a file URL without local file access." No repl global provides
+shell access (`bash`, `exec`, `spawn` are all undefined there).
+
+So the hang is specific to the three file tools plus `ask_user_question`, and the
+skill should route uncertain paths to `bash`.

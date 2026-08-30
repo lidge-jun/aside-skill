@@ -105,3 +105,49 @@ runtimeConfig: {
 Passing `-m` or `-p` flips `strictModelSelection` to true. Omitting them is not
 just a default; it changes how the model is selected. Leave them off unless a
 specific model is genuinely required.
+
+## bash is governed by a different mechanism
+
+Not every tool suspends. The daemon's `FILE_TOOL_CALLS` gate maps exactly three
+tools into the permission check:
+
+```js
+FILE_TOOL_CALLS = {
+  read_file:  xn => typeof xn?.path === "string"      ? { mode: "read",  path: xn.path } : null,
+  edit_file:  xn => typeof xn?.path === "string"      ? { mode: "write", path: xn.path } : null,
+  write_file: xn => typeof xn?.file_path === "string" ? { mode: "write", path: xn.file_path } : null,
+}
+```
+
+`bash` is absent from that map, so it never reaches the `ask` verdict and never
+suspends. It is confined instead by an OS sandbox: the daemon shells out through
+`sandbox-exec` with a `SEATBELT_BASE_POLICY`, which **denies** rather than asks.
+
+The practical difference, measured in one command with the account's
+`readableRoots`/`writableRoots` both empty:
+
+```
+bash: head -1 ~/Developer/new/700_projects/AGENTS.md ; head -2 /etc/hosts
+  -> stderr: head: .../AGENTS.md: Operation not permitted
+  -> stdout: ##
+             # Host Database
+  -> run continued normally, no suspend
+
+bash: printf ok > /tmp/_probe.txt && ls -la /tmp/_probe.txt
+  -> -rw-r--r--@ 1 jun wheel 2 ... /tmp/_probe.txt
+  -> file really created
+```
+
+The same workspace path through `read_file` hangs indefinitely.
+
+Two consequences worth holding onto. First, `bash` is the right tool when a path
+might be outside the roots, because a visible denial is strictly better than a
+silent deadlock. Second, the Seatbelt boundary is not the same boundary as the
+permission roots: `/etc/hosts` and `/tmp` were reachable while a workspace file was
+not, so do not assume "bash works" means "bash reaches everything."
+
+A caveat on provenance: an earlier run of these same probes, taken while the
+account had `/Users/jun` temporarily added to both root lists, showed `bash`
+reading the workspace file successfully. Re-running after that setting was removed
+produced the denial above. So the Seatbelt profile does track the configured roots
+to some degree; what it does not do is ask.
