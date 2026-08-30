@@ -1,0 +1,3 @@
+interface:
+  display_name: "Aside"
+  short_description: "Drive the Aside browser CLI for authenticated web work"
