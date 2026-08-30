@@ -66,18 +66,21 @@ aside repl "try{const l=await applePasswords.listLogins();console.log('UNLOCKED'
 ```
 
 **2. Leave "Unlock with Touch ID" OFF.** In the Apple Passwords settings there is an
-option along the lines of *Unlock the vault with your biometrics*. Do not enable
-it. Biometric unlock requires a live fingerprint at unlock time, which an agent
-cannot supply, so turning it on converts a once-per-setup ceremony into a prompt
-that blocks every future run. The stored form of this setting is
-`biometricUnlockEnabled` in `~/.aside/u/0/passwords/settings.json`; verify it reads
-`false`:
+option along the lines of *Unlock the vault with your biometrics*. Keep it
+disabled. With it off, the 6-digit PIN you set in step 1 is all the vault needs and
+agent-driven sign-in works normally. Turn it on and every unlock demands a live
+fingerprint, which an agent cannot supply, so a once-per-setup ceremony becomes a
+prompt that blocks every future run.
+
+The stored form is `biometricUnlockEnabled` in
+`~/.aside/u/0/passwords/settings.json`. Confirm it reads `false`:
 
 ```bash
 python3 -c "import json;print(json.load(open('$HOME/.aside/u/0/passwords/settings.json'))['biometricUnlockEnabled'])"
 ```
 
-The PIN path is a one-time setup. The biometric path is a permanent gate.
+PIN is a one-time setup. Biometrics is a permanent gate. Off is the working
+configuration.
 
 Also worth checking once: `autoLockTimeout` in the same file is in minutes
 (`10080` is a week). A short timeout means the vault re-locks between runs and the
