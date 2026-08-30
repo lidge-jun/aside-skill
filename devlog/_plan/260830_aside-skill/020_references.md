@@ -16,10 +16,16 @@ Verification: `head -1` must not be `---`.
 
 ## references/builtin-skills.md
 
-A summary collection of the 34 skills in `~/.aside/u/0/skills/builtin/`. One row
-per skill: name, one-line purpose, and whether it is repl-global backed (chrome,
-twitter, gmail, notion, slack, google-*) or instruction-only (password managers,
-onboarding, site-specific).
+A generated summary of the builtin skills in `~/.aside/u/0/skills/builtin/`. The
+hierarchy is NOT flat: 33 top-level directories each carry their own SKILL.md, and
+one container, `site-specific/`, carries no SKILL.md of its own while holding 16
+per-site skills a level deeper. Enumerate `*/SKILL.md`, never `*/`, so the
+container is never emitted as a loadable skill.
+
+Two tables, each with a `Backing` column marking an entry as `repl global` or
+`instructions`, so a reader can tell which skills expose a JS object that Codex
+could drive from repl directly. Verify that list against the live repl scope after
+an Aside update rather than assuming it.
 
 Not full copies. The point is letting Codex name the right skill when instructing
 exec.

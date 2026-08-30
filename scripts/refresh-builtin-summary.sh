@@ -46,7 +46,8 @@ if [ -d "$BUILTIN_DIR/site-specific" ]; then
     name=$(basename "$(dirname "$f")")
     d=$(desc_of "$f"); [ -z "$d" ] && d="(no description)"
     d=$(printf '%s' "$d" | cut -c1-130 | tr -d '|')
-    site_rows+="| \`$name\` | $d |"$'\n'
+    if [[ "$REPL_BACKED" == *" $name "* ]]; then kind="repl global"; else kind="instructions"; fi
+    site_rows+="| \`$name\` | $kind | $d |"$'\n'
     site_count=$((site_count+1))
   done
 fi
@@ -77,8 +78,8 @@ fi
   echo "Nested under \`site-specific/\`. The container directory has no SKILL.md and is not itself"
   echo "loadable; name the individual site skill instead."
   echo
-  echo "| Skill | Purpose |"
-  echo "|---|---|"
+  echo "| Skill | Backing | Purpose |"
+  echo "|---|---|---|"
   printf '%s' "$site_rows"
 } > "$OUT"
 

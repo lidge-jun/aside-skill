@@ -150,7 +150,12 @@ directly; name it in the prompt and the agent picks it up.
 
 ```bash
 timeout 300 aside exec "Use the google-sheets skill to read the totals from <url>.
-<three clauses>"
+Report each row label and its total.
+Read and write files only under ~/.aside/u/0/ - do not read or write any other
+local path, including ~/Documents or anywhere else on my filesystem.
+Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
+Do not ask me any questions. If something is blocked or ambiguous, pick the most
+reasonable option and continue, or report exactly what blocked you and stop."
 ```
 
 Naming the skill usually beats describing the workflow, because several of them

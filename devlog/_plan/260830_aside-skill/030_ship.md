@@ -4,11 +4,20 @@ Consumed by wp3-verify and wp4-ship.
 
 ## Validation
 
+The validator imports PyYAML, which the default `python3` on this machine lacks.
+Resolve a working interpreter before relying on the check:
+
 ```bash
-python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py <skill-dir>
+VALIDATOR_PY=/usr/local/bin/python3          # has PyYAML here
+"$VALIDATOR_PY" -c 'import yaml' 2>/dev/null || {
+  python3 -m venv /tmp/_yamlenv && /tmp/_yamlenv/bin/pip install -q pyyaml
+  VALIDATOR_PY=/tmp/_yamlenv/bin/python
+}
+"$VALIDATOR_PY" ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py <skill-dir>
 ```
 
-Must exit clean with no placeholder findings.
+Must exit clean with no placeholder findings. A `ModuleNotFoundError: yaml` is an
+environment failure, not a passing validation.
 
 Also assert: refskill-aside.md has no leading frontmatter; every hang class in
 SKILL.md traces to devlog/000-research.md; no exec template contains `-m`.

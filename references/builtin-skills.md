@@ -55,21 +55,21 @@ open a tab. An `instructions` skill is guidance for the agent with no matching g
 Nested under `site-specific/`. The container directory has no SKILL.md and is not itself
 loadable; name the individual site skill instead.
 
-| Skill | Purpose |
-|---|---|
-| `airtable` | Airtable base, view, and record-pane guidance. |
-| `amazon` | Amazon shopping, orders, and account-state guidance. |
-| `asana` | Asana inbox, my-tasks, and task-pane guidance. |
-| `clickup` | ClickUp command-bar, task, and inbox guidance. |
-| `confluence` | Confluence Cloud page and editor guidance. |
-| `discord` | Discord web app channel and message workflow guidance. |
-| `github` | GitHub repo, issue, PR, and review guidance. |
-| `google-calendar` | Google Calendar event browsing, search, and creation guidance. |
-| `google-drive` | Google Drive navigation and result-reading guidance. |
-| `google-forms` | Google Forms navigation and editing guidance. |
-| `google-slides` | Google Slides reading and editing guidance. |
-| `jira` | Jira Cloud issue, search, and list-view guidance. |
-| `linear` | Linear issue, inbox, and keyboard-driven workflow guidance. |
-| `linkedin` | Read this when you need to use LinkedIn. |
-| `notion` | Notion workspace, page navigation, and block-editing guidance. |
-| `trello` | Trello board, inbox, and card workflow guidance. |
+| Skill | Backing | Purpose |
+|---|---|---|
+| `airtable` | instructions | Airtable base, view, and record-pane guidance. |
+| `amazon` | instructions | Amazon shopping, orders, and account-state guidance. |
+| `asana` | instructions | Asana inbox, my-tasks, and task-pane guidance. |
+| `clickup` | instructions | ClickUp command-bar, task, and inbox guidance. |
+| `confluence` | instructions | Confluence Cloud page and editor guidance. |
+| `discord` | instructions | Discord web app channel and message workflow guidance. |
+| `github` | instructions | GitHub repo, issue, PR, and review guidance. |
+| `google-calendar` | instructions | Google Calendar event browsing, search, and creation guidance. |
+| `google-drive` | instructions | Google Drive navigation and result-reading guidance. |
+| `google-forms` | instructions | Google Forms navigation and editing guidance. |
+| `google-slides` | instructions | Google Slides reading and editing guidance. |
+| `jira` | instructions | Jira Cloud issue, search, and list-view guidance. |
+| `linear` | instructions | Linear issue, inbox, and keyboard-driven workflow guidance. |
+| `linkedin` | repl global | Read this when you need to use LinkedIn. |
+| `notion` | repl global | Notion workspace, page navigation, and block-editing guidance. |
+| `trello` | instructions | Trello board, inbox, and card workflow guidance. |
