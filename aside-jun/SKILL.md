@@ -131,6 +131,14 @@ skills: signing in, navigating an unfamiliar site, reading Gmail or Notion,
 handling a CAPTCHA, anything multi-step where the next action depends on what the
 last one revealed.
 
+Before delegating anything that has to **sign in**, read
+[references/credentials.md](references/credentials.md). Aside's credential layer
+has a first-run handshake that hangs a CLI run: Apple Passwords wants a 6-digit
+code only a human can read off the screen. That reference covers the one-time
+setup, why "Unlock with Touch ID" must stay off, why 1Password is the smoother
+choice, and the Importer's EPERM failure. The reliable pattern is that the user
+signs in once in the Aside window and `exec` inherits the live session.
+
 Reach for **repl** when you already know what to do. It is a Playwright-style
 surface and you control every step. It is also the safer choice for file work,
 because the repl filesystem throws immediately on a bad path instead of hanging.
