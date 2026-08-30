@@ -37,8 +37,45 @@ bypass: the Seatbelt profile has its own boundary. In one probe `head` on a
 workspace file was denied outright while `/etc/hosts` was read and `/tmp` was
 written in the same command.
 
-So when a task must touch a path you are not certain about, instruct the agent to
-use `bash` rather than `read_file`. A denial you can see beats a silent deadlock.
+So the rule for exec prompts is blunt: **never let the agent use `read_file`,
+`write_file`, or `edit_file` on a path outside `~/.aside/u/0/`.** Tell it to use
+`bash` instead. A denial you can see beats a silent deadlock.
+
+### Granting a path on purpose
+
+When the task genuinely needs a specific outside path, widen the roots first
+rather than hoping. `aside.settings.set` writes the account permission config, and
+a session created afterwards picks it up:
+
+```bash
+# grant
+aside repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
+n.files.readableRoots=['<abs-path>']; aside.settings.set('permission',n); \
+console.log(JSON.stringify(aside.settings.get('permission').files))"
+
+timeout 300 aside exec "<task using that path> <the three clauses>"
+
+# restore
+aside repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
+n.files.readableRoots=[]; n.files.writableRoots=[]; aside.settings.set('permission',n); \
+console.log(JSON.stringify(aside.settings.get('permission').files))"
+```
+
+Verified: with `~/Developer/.../700_projects` granted this way, `read_file` on a
+file there returned its contents immediately instead of hanging. Note
+`settings.set` returns `undefined` even on success, so read the value back rather
+than trusting the return.
+
+Three cautions. Roots are read at session creation, so grant before launching and
+never mid-run. Always restore afterwards, in the same turn, so a broad grant does
+not outlive the task. And widening the roots is a change to the user's security
+posture: do it when the task requires that path, tell the user which path you
+granted and that you restored it, and ask first when the scope is broad
+(`/Users/jun`, `/`) rather than a specific directory.
+
+The cheaper move is usually to avoid the grant entirely. Aside can write its
+output under `~/.aside/u/0/` and Codex, which has full filesystem access, copies it
+wherever it belongs.
 No flag prevents this. There is no `--yes`, no auto-deny, no timeout option.
 Prevention lives in two places: the prompt you write, and a deadline you impose
 from outside.
@@ -106,8 +143,8 @@ part with exec and the rest with repl.
 Every exec prompt ends with these three clauses, used verbatim:
 
 ```text
-Read and write files only under ~/.aside/u/0/ - do not read or write any other
-local path, including ~/Documents or anywhere else on my filesystem.
+Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
+local path use the bash tool instead - never the file tools.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop.
@@ -117,18 +154,19 @@ Assembled:
 
 ```bash
 timeout 300 aside exec "Go to <url> and <task>. Report <fields>.
-Read and write files only under ~/.aside/u/0/ - do not read or write any other
-local path, including ~/Documents or anywhere else on my filesystem.
+Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
+local path use the bash tool instead - never the file tools.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop."
 ```
 
-The read clause carries as much weight as the write clause. Guard mode does
-technically permit reading `~/Documents` and `~/Downloads`, but naming a single
-root keeps the agent from drifting to a neighbouring path that suspends. Aside's
-own system prompt tells the agent to "request access once" for outside paths, so
-without this override it will do precisely the thing that deadlocks it.
+The first clause is the important one, and it is a tool rule rather than a path
+rule: the file tools stay inside `~/.aside/u/0/`, and everything else goes through
+`bash`. Reading is no safer than writing here, so the clause covers both. Aside's
+own system prompt tells the agent to "request access once" for outside paths,
+which is precisely the move that deadlocks a CLI run, so the override has to be
+explicit.
 
 Beyond the clauses, a good prompt names the URL instead of describing it, names the
 element or value to act on, enumerates what to report back, and says what not to
@@ -194,8 +232,8 @@ directly; name it in the prompt and the agent picks it up.
 ```bash
 timeout 300 aside exec "Use the google-sheets skill to read the totals from <url>.
 Report each row label and its total.
-Read and write files only under ~/.aside/u/0/ - do not read or write any other
-local path, including ~/Documents or anywhere else on my filesystem.
+Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
+local path use the bash tool instead - never the file tools.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop."
