@@ -147,8 +147,18 @@ passwordManager.listItems({ text: '<host>', category: 'login' }) and fill a clea
 matching item with passwordManager.autofillItem(page, itemId). Verify with a fresh
 snapshot. Never print a password.
 
-If no item matches, stop and report that the vault has no credential for <host>.
-Do not create an account.
+If no item matches and the site offers free registration, sign up without ever handling
+the password yourself: generate a reference with
+passwordManager.generatePassword({ length: 16, include: ['lowercase','uppercase','digit'] }),
+fill it into the password field ref from your latest snapshot with
+passwordManager.fillPassword(page, '<field-ref>', passwordRef), and after signup save it
+with passwordManager.listVaults() then passwordManager.createItem({ vaultId, category:
+'login', title, urls, fields: [{ label: 'username', value: <username>, designation:
+'username' }, { label: 'password', value: passwordRef, designation: 'password', isSecret:
+true }] }). Pass the ref, never a literal password.
+
+Do not accept a paid plan, enter payment details or start a trial that needs a card. If
+signup demands any of those, or a phone number, stop and report it.
 
 If a passkey appears, try 'Try another way' and a password fallback first.
 
@@ -165,35 +175,14 @@ reasonable option and continue, or report exactly what blocked you and stop."
 
 Then copy the notes out yourself; Codex has the filesystem access Aside does not.
 
-## Creating an account, only when asked
-
-`passwordManager` can register a new account, and research alone is not a reason to.
-Signing up commits the user to terms they have not read, attaches their identity and
-email to a service, and can start a trial that later charges them. Treat it as an
-action outside the research mandate: ask the user first, name the site, and say what
-the account will be used for. Without that answer, report the missing credential and
-stop.
-
-Once the user has agreed, add this to the exec prompt in place of the stop clause. It
-keeps the password out of the transcript by passing a reference:
-
-```text
-The user has approved creating an account on <site>. Register with <email>, and never
-handle the password yourself: generate a reference with
-passwordManager.generatePassword({ length: 16, include: ['lowercase','uppercase','digit'] }),
-fill it into the password field ref from your latest snapshot with
-passwordManager.fillPassword(page, '<field-ref>', passwordRef), and after signup save it
-with passwordManager.listVaults() then passwordManager.createItem({ vaultId, category:
-'login', title, urls, fields: [{ label: 'username', value: '<email>', designation:
-'username' }, { label: 'password', value: passwordRef, designation: 'password', isSecret:
-true }] }). Pass the ref, never a literal password.
-
-Do not accept a paid plan, enter payment details or start a trial that requires a card.
-If signup demands any of those, or asks to verify a phone number, stop and report it.
-```
-
-Confirm the item landed in the vault afterwards, so the user owns a credential they can
-find and revoke rather than one stranded in a transcript.
+The reason signup is in the default template is that the alternative is worse. Stopping
+at a free registration wall means either abandoning the source or having the user create
+the account by hand and paste a password into a transcript. `generatePassword` returns a
+reference the agent never sees in plain text, `fillPassword` resolves it inside the
+browser, and `createItem` stores it in the vault, so the credential ends up somewhere
+the user can find and revoke. Check the item landed afterwards. The paid-plan, payment
+and phone clauses are the real boundary: a free account is a research cost, a charge is
+not.
 
 ## Claim ledger
 
