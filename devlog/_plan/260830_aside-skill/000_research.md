@@ -234,7 +234,7 @@ redirected to a file, then the file and the target path were both inspected. The
 write-inside control used the identical shape, differing only in the path:
 
 ```bash
-timeout 180 aside exec 'Use write_file to create /Users/jun/.aside/u/0/_probe.txt \
+timeout 180 aside exec 'Use write_file to create ~/.aside/u/0/_probe.txt \
 with content ok. Then bash: ls -la that path. Report the ls output verbatim.' \
   > /tmp/probe_inside.txt 2>&1          # completed ~6s, file created
 

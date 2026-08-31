@@ -60,20 +60,67 @@ rather than hoping. `aside.settings.set` writes the account permission config, a
 a session created afterwards picks it up:
 
 ```bash
-# grant
+# 1. save what is already configured - do not skip this
+# 2>/dev/null drops the CLI's timing line; head -1 keeps just the JSON
+aside repl "console.log(JSON.stringify(aside.settings.get('permission').files))" \
+  2>/dev/null | head -1 > /tmp/aside-roots.json
+cat /tmp/aside-roots.json
+
+# 2. grant, adding to the saved lists rather than replacing them.
+# Grant reads only, or reads and writes - but match what the clause allows.
 aside repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
-n.files.readableRoots=['<abs-path>']; aside.settings.set('permission',n); \
+n.files.readableRoots=[...n.files.readableRoots,'<abs-path>']; \
+n.files.writableRoots=[...n.files.writableRoots,'<abs-path>']; \
+aside.settings.set('permission',n); \
 console.log(JSON.stringify(aside.settings.get('permission').files))"
 
-timeout 300 aside exec "<task using that path> <the three clauses>"
+# 3. run, with the granted-root variant of the clauses
+timeout 300 aside exec "<task using that path> <clauses, first one naming both roots>"
 
-# restore
-aside repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
-n.files.readableRoots=[]; n.files.writableRoots=[]; aside.settings.set('permission',n); \
+# 4. restore the saved values, not empty lists
+aside repl "const saved=$(cat /tmp/aside-roots.json); \
+const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
+n.files.readableRoots=saved.readableRoots; n.files.writableRoots=saved.writableRoots; \
+aside.settings.set('permission',n); \
 console.log(JSON.stringify(aside.settings.get('permission').files))"
 ```
 
-Verified: with `~/Developer/.../700_projects` granted this way, `read_file` on a
+Step 1 is not optional. Restoring to `[]` would silently delete roots the user had
+configured before you arrived, which is a worse outcome than the hang you were
+avoiding.
+
+The round trip was run as written. Saved `{"readableRoots":[],"writableRoots":[]}`,
+granted both lists, then an `exec` run wrote and read a file under the granted path:
+`write_file` returned `Successfully wrote` and `read_file` returned the contents, in
+seconds, with no suspension. Restoring put the original empty lists back.
+
+That is the proof the grant has to cover writes: with the path in `readableRoots`
+only, the same `write_file` would have met `outsideWrite: "ask"` and parked. The
+spread in step 2 is what makes it additive; assigning a bare array there is the other
+bug this sequence exists to avoid.
+
+While a grant is live, the first standing clause has to name the granted path too,
+or the prompt forbids the very access you just arranged. The clause and the grant
+must cover the same operations: `outsideWrite` stays `ask`, so a path present only in
+`readableRoots` still suspends on a write.
+
+```text
+Use read_file, write_file and edit_file only under ~/.aside/u/0/ and <abs-path>. For
+any other local path use the bash tool instead - never the file tools.
+```
+
+For a read-only task, drop `writableRoots` from step 2 and narrow the clause to
+match:
+
+```text
+Use read_file only under ~/.aside/u/0/ and <abs-path>, and write_file and edit_file
+only under ~/.aside/u/0/. For any other local path use the bash tool instead - never
+the file tools.
+```
+
+Revert to the plain clause as soon as the grant is restored.
+
+Verified: with a single project directory granted this way, `read_file` on a
 file there returned its contents immediately instead of hanging. Note
 `settings.set` returns `undefined` even on success, so read the value back rather
 than trusting the return.
@@ -83,7 +130,7 @@ never mid-run. Always restore afterwards, in the same turn, so a broad grant doe
 not outlive the task. And widening the roots is a change to the user's security
 posture: do it when the task requires that path, tell the user which path you
 granted and that you restored it, and ask first when the scope is broad
-(`/Users/jun`, `/`) rather than a specific directory.
+(a whole home directory, or `/`) rather than a specific directory.
 
 The cheaper move is usually to avoid the grant entirely. Aside can write its
 output under `~/.aside/u/0/` and Codex, which has full filesystem access, copies it
@@ -260,6 +307,11 @@ write_stdin   session_id=<id>  chars=""  yield_time_ms=120000
 Empty `chars` polls without typing. If output stops right after a tool-call line
 and stays stopped, that is a hang rather than slow work.
 
+The user cannot see the Aside CLI's output, so a long run needs narration: tell them
+roughly every 60 seconds what the agent is doing and what it has established. Aside's
+own guidance asks for this and it is the difference between a run that looks alive and
+one that looks hung.
+
 Useful options: `--session <id>` continues a healthy run, and
 `--effort ultrabrowse` enables proactive mode for flows that must recover from
 surprises on their own.
@@ -411,8 +463,13 @@ anything, or each prompt now points outside the allowed roots.
 
 Everything Aside writes belongs under `~/.aside/u/0/`. Codex has full filesystem
 access of its own, so when a result needs to reach the workspace, let Aside write
-it inside its root and copy it out yourself. Never widen Aside's roots to reach the
-workspace.
+it inside its root and copy it out yourself. Copying out is the default and it is
+almost always enough.
+
+Widening the roots is the exception, not a second normal path. Reach for the
+grant-run-restore sequence above only when a task genuinely cannot be done any other
+way, keep the grant to one specific directory, restore it in the same turn, and tell
+the user what you granted. Do not widen the roots merely to save yourself a copy.
 
 `~/.aside/u/0/models.json` and `accounts.json` can hold plaintext credentials.
 Never print or commit them.

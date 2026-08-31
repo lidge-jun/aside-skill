@@ -9,6 +9,15 @@ login, and it also makes it easy to hang: a non-interactive `aside exec` cannot
 answer a permission prompt or a question, so it waits forever with no error output.
 This skill encodes the rules that avoid that.
 
+It is also checked against Aside's own guidance rather than written beside it. Aside
+ships an `aside-browser` skill as a string constant inside its daemon binary; every
+normative line in it was extracted and classified, 77 rows in total, and the result
+is in `devlog/_plan/260831_aside-official-parity/001_parity-ledger.md`. Three of
+those rows were places this skill was wrong and have been fixed. One is a place
+Aside's own advice deadlocks a CLI run - "ASK USER AS THE LAST RESORT" - and is
+deliberately overridden. The rest of the official protocol is now carried here, so
+you should not need to read both.
+
 ## Install
 
 Only the `aside-jun/` directory is the skill. `devlog/` is research and planning

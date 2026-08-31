@@ -127,14 +127,14 @@ The practical difference, measured in one command with the account's
 `readableRoots`/`writableRoots` both empty:
 
 ```
-bash: head -1 ~/Developer/new/700_projects/AGENTS.md ; head -2 /etc/hosts
+bash: head -1 ~/<a-project>/AGENTS.md ; head -2 /etc/hosts
   -> stderr: head: .../AGENTS.md: Operation not permitted
   -> stdout: ##
              # Host Database
   -> run continued normally, no suspend
 
 bash: printf ok > /tmp/_probe.txt && ls -la /tmp/_probe.txt
-  -> -rw-r--r--@ 1 jun wheel 2 ... /tmp/_probe.txt
+  -> -rw-r--r--@ 1 <user> wheel 2 ... /tmp/_probe.txt
   -> file really created
 ```
 
@@ -147,7 +147,7 @@ permission roots: `/etc/hosts` and `/tmp` were reachable while a workspace file 
 not, so do not assume "bash works" means "bash reaches everything."
 
 A caveat on provenance: an earlier run of these same probes, taken while the
-account had `/Users/jun` temporarily added to both root lists, showed `bash`
+account had the whole home directory temporarily added to both root lists, showed `bash`
 reading the workspace file successfully. Re-running after that setting was removed
 produced the denial above. So the Seatbelt profile does track the configured roots
 to some degree; what it does not do is ask.
