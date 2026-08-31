@@ -223,9 +223,28 @@ own system prompt tells the agent to "request access once" for outside paths,
 which is precisely the move that deadlocks a CLI run, so the override has to be
 explicit.
 
+The third clause overrides Aside's own instruction. Its builtin guidance ends the
+login section with "**ASK USER AS THE LAST RESORT**", which is sound advice in the
+app window and a deadlock in a non-interactive run: there is no last resort, only a
+parked process. Replace it with a ladder that ends in a clean stop:
+
+> Never ask a question from a non-interactive `aside exec` run. The CLI cannot
+> answer `ask_user_question`, an approval prompt, Touch ID, a passkey gesture, or a
+> macOS Apple Passwords code. Instead, work the routes that are already available:
+> the inherited signed-in session, a clearly matching password-manager item, a
+> configured external provider, a password or OAuth fallback behind "Try another
+> way", an already-available TOTP, or the `captcha` tools. If completion still needs
+> a human, do not ask and do not wait. Report the exact blocking screen, what a
+> human would have to do, and any side effect already completed, then stop.
+
 Beyond the clauses, a good prompt names the URL instead of describing it, names the
 element or value to act on, enumerates what to report back, and says what not to
 touch when the task is read-only.
+
+The `~/Downloads` clause is scoped to the exec agent, whose `bash` tool can reach it.
+repl `fs` cannot: it sees only the session and project roots. A file the browser
+downloaded is still readable through `download.path()`, but within the same
+invocation only.
 
 Omit `-m`. Passing a model flips `strictModelSelection` in the session config, so
 leaving it off is a behavioral choice rather than laziness. Aside's own settings
@@ -273,28 +292,63 @@ substitute its root everywhere in the clauses first.
 aside repl "const p = await openTab('example.com'); console.log(await p.title())"
 ```
 
-`console.log` is required; a bare expression prints nothing. Scope persists across
-one session, and there is no `import`.
+`console.log` is required; a bare expression prints nothing. There is no `import`
+or `require`, and the execution timeout is 120 seconds.
 
-The working loop is inspect, act, re-inspect:
+### One invocation is one session
+
+Aside's own guidance says the repl is "a persistent ES2023+ JavaScript environment"
+where "top-level `const` and `let` bindings persist." That is true inside a single
+invocation and false between them. Measured across two consecutive
+`aside repl` calls:
+
+| probe set in call 1 | call 2 |
+|---|---|
+| `globalThis.MARK` | `undefined` |
+| `page` | `null` |
+| `tabs.length` | `0` |
+| the tab it opened, via `listBrowserTabs()` | gone, the tab was closed |
+
+Two consequences worth designing around. A whole inspect-act-verify flow has to fit
+in one call, which is fine because one call can hold an entire flow. And a tab you
+need to survive should be opened in the Aside window, then borrowed with
+`attachBrowserTab(targetId)`, which detaches instead of closing on exit.
+
+### The working loop
+
+Inspect, act, re-inspect:
 
 ```js
 const p = await openTab('news.ycombinator.com');
-const s = await snapshot(p, { interactive: true });
-console.log(s.tree.slice(0, 2000));
+const s1 = await snapshot(p, { interactive: true });
+console.log(s1.tree);
 await p.locator('a').first().click();
-console.log((await snapshot(p, { interactive: true })).diff);
+const s2 = await snapshot(p, { interactive: true });
+console.log(s2.diff);
 ```
 
+Print `tree` the first time and `diff` after acting. Never truncate a snapshot with
+`slice`, `substring`, or `split`: the ref you need is usually the one that gets cut.
+Number them `s1`, `s2` so an earlier tree stays readable.
+
 Refs go stale as soon as the DOM moves, so snapshot again after acting instead of
-reusing an old `e12`. When refs cannot target something, such as canvas, drag
+reusing an old `e12`. Pass a ref straight to `p.locator('e31')` and never splice it
+into a CSS selector. When refs cannot target something, such as canvas, drag
 handles, or map pins, fall back to `cua` coordinates.
 
 A passkey prompt is usually a fork rather than a wall. Most sites keep a password
 fallback behind "Try another way", and an exec agent can take it and finish the
 sign-in on its own. Say so in the prompt instead of treating passkeys as fatal.
 
-Full surface: [references/repl-api.md](references/repl-api.md).
+Files and downloads live inside the session directory: `pwd` is
+`~/.aside/u/0/sessions/<session-id>`, so a relative `./artifacts/` path is already
+inside the account root. Anything outside the roots throws
+`Path escapes Project and session roots: <path>` immediately rather than suspending,
+which is the opposite of the exec file tools.
+
+Full surface, including the tab-inspection protocol, the reading-escalation ladder,
+download handling, and the service globals:
+[references/repl-api.md](references/repl-api.md).
 
 ## What Aside already knows
 

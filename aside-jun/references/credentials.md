@@ -159,12 +159,75 @@ That is the shape to copy. Search, choose by username or host, autofill, then
 re-snapshot to confirm. `autofillItem` returns nothing useful, so the snapshot is
 the verification step, not the return value.
 
-## Passkeys
+## Choosing a route
 
-Passkey assertion is designed to require a human gesture. Even with passkeys
-imported into Aside, macOS may demand biometric confirmation at use time, which an
-agent cannot satisfy. Treat any passkey-gated site as needing a human present, and
-have the user sign in once in the Aside window so `exec` inherits a live session.
+Every branch below names the surface and the concrete call. `passwordManager` means
+exec's repl tool, since it is `undefined` in a CLI repl.
+
+**Already signed in.** Open the page and read it. Confirm the account rather than
+assuming: `googleAccounts.print()` for Google, `await twitter.getMe()` for X, or an
+interactive snapshot of the header. Nothing else is needed.
+
+**A vault item matches.** Delegate to exec and let it search and fill:
+
+```js
+const items = await passwordManager.listItems({ text: '<host>', category: 'login' });
+await passwordManager.autofillItem(page, '<selected-item-id>');
+console.log((await snapshot(page, { interactive: true })).tree);
+```
+
+Choose by host, title, username, and task context. `autofillItem` returns nothing
+useful, so the snapshot is the verification.
+
+**An external provider is locked.** For 1Password the unlock happens on its own
+extension page, then you return:
+
+```js
+await passwordManager.unlockExternalPasswordManager(page, '1password');
+```
+
+Providers are `1password`, `bitwarden`, `dashlane`, `lastpass`, `proton-pass`. If no
+saved unlock item exists the call reports so; fall back to the Aside vault rather
+than asking.
+
+**A passkey prompt.** Usually a fork, not a wall. Look for "Try another way" and a
+password or OAuth fallback first; a verified run took exactly that detour and
+finished the sign-in on its own. Passkey assertion itself does require a human
+gesture, and macOS may demand biometric confirmation at use time, so treat it as a
+human step only once no fallback is offered. Then the user signs in once in the
+Aside window and `exec` inherits the live session.
+
+**A TOTP field.** If the provider already filled it, verify and move on. Otherwise
+`applePasswords.getOtps(url)` returns codes once the vault is unlocked. Never print
+a seed or a recovery code.
+
+**A CAPTCHA.** `captcha.click(page, bounds)` for checkboxes,
+`captcha.drag(page, from, to)` for sliders, `captcha.readText(page, bounds)` for
+text. Verify with a fresh snapshot afterwards.
+
+**Biometrics.** Not automatable, ever. Stop and report. Keeping
+`biometricUnlockEnabled` false is what stops this from recurring.
+
+### The full passwordManager surface
+
+Eight methods, from Aside's builtin `password-manager` skill:
+
+| method | use |
+|---|---|
+| `listVaults()` | `{vaultId, name}[]` |
+| `listItems({text?, category?, url?, vaultId?})` | search; never returns secrets |
+| `autofillItem(page, itemId)` | fills logins, credit cards, identities |
+| `unlockExternalPasswordManager(page, provider)` | unlock a connected provider |
+| `generatePassword({length?, include?, symbols?})` | returns a ref, not a string |
+| `fillPassword(page, fieldRef, passwordRef)` | fill a generated ref during signup |
+| `createItem(input)` | store a new credential |
+| `updateItem(itemId, patch)` | amend title, urls, fields, notes |
+
+`generatePassword` plus `fillPassword` is how a signup completes without the agent
+ever seeing the password. Categories include `login`, `credit-card`, and
+`identity`, so checkout forms use the same `autofillItem` path.
+
+There is no TOTP method here; codes come from `applePasswords.getOtps(url)`.
 
 ## The pattern that works
 
