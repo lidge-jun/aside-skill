@@ -1,6 +1,6 @@
 ---
 name: aside-jun
-description: Drive the Aside browser CLI for work that needs a real signed-in browser - reading pages behind a login, automating multi-step web flows, and delegating browser tasks to Aside's own agent. Use when a session or cookies are required and an HTTP fetch would fail; not for ordinary public-page fetching or local browser QA.
+description: Drive the Aside browser CLI on macOS for work that needs a real signed-in browser - reading pages behind a login, automating multi-step web flows, and delegating browser tasks to Aside's own agent. Use when a session or cookies are required and an HTTP fetch would fail; not for ordinary public-page fetching or local browser QA.
 ---
 
 # Aside
@@ -9,6 +9,13 @@ Aside is a Chromium fork with a built-in browser agent. Its CLI drives that agen
 against the user's real, logged-in profile, which makes it the right tool when a
 task genuinely needs an existing session: admin consoles, dashboards behind SSO,
 DMs, anything where a plain HTTP fetch gets a login wall.
+
+Aside is macOS-only: the CLI is a `Mach-O` binary and the daemon needs the GUI app.
+Every command here is written for that platform, which is why the shell commands
+use base-system tools instead of the GNU ones. `timeout` and `flock` do not exist
+on a stock macOS machine, so this skill uses `perl -e 'alarm ...'` and `shlock`
+instead. Both substitutions are load-bearing, not cosmetic; see the deadline
+section below.
 
 ## The one rule that matters
 
@@ -73,10 +80,42 @@ the prompt you write, and a deadline you impose from outside.
 **Always run exec under a host timeout.**
 
 ```bash
-timeout 300 aside exec "<prompt>"
+perl -e 'alarm shift; exec @ARGV' 300 aside exec "<prompt>"
 ```
 
 Without it, a hung run holds the shell indefinitely.
+
+That command is deliberately not `timeout 300`. Aside ships only as a macOS
+`Mach-O` binary, and **macOS has no `timeout`**, so the obvious spelling of the one
+mandatory safeguard fails on the only platform Aside runs on. It does not fail
+safe, either: `command not found` exits 127 before `aside` is ever invoked, so a
+copy-pasted `timeout 300 aside exec` looks like a broken CLI while the run it was
+meant to bound never started. Confirmed on macOS 27.0 arm64, where `timeout`,
+`gtimeout`, and `flock` are all absent from a Homebrew install without
+`coreutils`.
+
+`perl` is in the macOS base system, so the `alarm` form works on a stock machine
+with nothing installed. It behaves the way the safeguard needs:
+
+| Property | Measured |
+|---|---|
+| Fires at the deadline | `alarm 2` on `sleep 30` returned at 2.009s |
+| Reports the kill distinctly | exit `142`, which is `128 + SIGALRM` |
+| Passes a normal exit through | child `exit 7` surfaced as `7` |
+
+`exec` replaces the shell with `aside` in the same process, and the kernel timer
+set by `alarm` survives that replacement, which is why the deadline still lands on
+the CLI rather than on a wrapper that already exited.
+
+A fired alarm was verified against a real hang, not just against `sleep`. An exec
+run told to `read_file /etc/hosts` with the protective clauses removed printed its
+tool-call line, went silent, and was killed at 30.2s by `alarm 30`; the suspended
+session count went from 4 to 5 across the run. Without the deadline that run would
+still be parked.
+
+If you prefer the documented spelling, `brew install coreutils` provides
+`gtimeout`, and `gtimeout 300 aside exec` is then equivalent. Do not assume it is
+present.
 
 A fired timeout kills the CLI, not the work already done. Everything the agent
 completed before it suspended still happened: files written inside the allowed
@@ -203,7 +242,7 @@ reasonable option and continue, or report exactly what blocked you and stop.
 Assembled:
 
 ```bash
-timeout 300 aside exec "Go to <url> and <task>. Report <fields>.
+perl -e 'alarm shift; exec @ARGV' 300 aside exec "Go to <url> and <task>. Report <fields>.
 Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
 local path use the bash tool instead - never the file tools.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
@@ -248,7 +287,7 @@ pick the model.
 Runs take minutes. Start one, capture the session, then poll:
 
 ```
-exec_command  cmd="timeout 300 aside exec '<prompt>'"  yield_time_ms=30000
+exec_command  cmd="perl -e 'alarm shift; exec @ARGV' 300 aside exec '<prompt>'"  yield_time_ms=30000
 write_stdin   session_id=<id>  chars=""  yield_time_ms=120000
 ```
 
@@ -273,7 +312,9 @@ memory store hold what is generally true. See
 or a LaunchAgent.
 
 Scheduling needs no machinery beyond that. Point cron or a LaunchAgent straight at
-`aside exec` with a full prompt, wrap it in `timeout` and `flock`, and let each
+`aside exec` with a full prompt, wrap it in a deadline and a lock -
+`perl -e 'alarm ...'` and `shlock` on macOS, since `timeout` and `flock` are not
+installed - and let each
 tick be a complete run. Session ids are not worth saving to disk, because they stop
 resolving after the purge window. Aside's memory store has room to spare - a store
 in daily use sat at 7.4MB with 217 index entries - so let it accumulate what is
@@ -359,7 +400,7 @@ Jira, Linear, GitHub, and Trello. **Only exec can load them.** You cannot invoke
 directly; name it in the prompt and the agent picks it up.
 
 ```bash
-timeout 300 aside exec "Use the google-sheets skill to read the totals from <url>.
+perl -e 'alarm shift; exec @ARGV' 300 aside exec "Use the google-sheets skill to read the totals from <url>.
 Report each row label and its total.
 Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
 local path use the bash tool instead - never the file tools.

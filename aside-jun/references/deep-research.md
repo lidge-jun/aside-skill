@@ -140,7 +140,7 @@ Signing up to read documentation, logging into a portal, clearing a CAPTCHA - re
 cannot do these, because `passwordManager` lives only in exec's repl tool. Delegate:
 
 ```bash
-timeout 600 aside exec "Research <question> using <site>, which requires an account.
+perl -e 'alarm shift; exec @ARGV' 600 aside exec "Research <question> using <site>, which requires an account.
 
 If a sign-in is needed, use your repl tool: search the vault with
 passwordManager.listItems({ text: '<host>', category: 'login' }) and fill a clearly

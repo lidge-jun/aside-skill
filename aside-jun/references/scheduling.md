@@ -79,7 +79,11 @@ roots, so the file tools work there without any permission detour.
 JOB=~/.aside/u/0/jobs/youtube-digest
 mkdir -p "$JOB"
 
-flock -n /tmp/yt-digest.lock timeout 600 aside exec "$(cat <<EOF
+LOCK=/tmp/yt-digest.lock
+shlock -p $$ -f "$LOCK" || exit 0
+trap 'rm -f "$LOCK"' EXIT
+
+perl -e 'alarm shift; exec @ARGV' 600 aside exec "$(cat <<EOF
 Read $JOB/state.md for what you already handled and skip anything listed there.
 Do today's work, append what you handled to $JOB/state.md, and write the output to
 $JOB/$(date +%F).md.
@@ -92,9 +96,36 @@ EOF
 )" >> "$JOB/run.log" 2>&1
 ```
 
-`flock -n` skips the run when the previous one is still going, which matters
-because a hung run never exits on its own. `timeout` bounds it. Both are required,
-not optional, for unattended execution.
+A lock and a deadline are both required, not optional, for unattended execution:
+the lock skips a tick while the previous one is still going, which matters because
+a hung run never exits on its own, and the deadline bounds the run itself.
+
+Neither is spelled the usual way, because **macOS ships neither `flock` nor
+`timeout`** and Aside is macOS-only. On macOS 27.0 arm64 with Homebrew but without
+`coreutils`, `flock`, `timeout`, and `gtimeout` are all absent. That matters more
+in a scheduled job than at an interactive prompt: `command not found` exits 127
+before `aside` runs, so every tick fails silently into `run.log` and the job looks
+like it is scheduled while never once doing its work.
+
+`shlock` and `perl` are both in the macOS base system, so this script runs on a
+stock machine. `shlock` is a pid-file lock from the news-server era and it covers
+the two cases a scheduled job actually meets, verified rather than assumed:
+
+| Case | Behaviour |
+|---|---|
+| Previous tick still running | Refuses the lock, so `|| exit 0` skips the tick |
+| Previous tick crashed | Sees the dead pid, reclaims the stale lock, proceeds |
+
+The second case is the one to care about. `shlock` validates the recorded pid
+instead of only testing whether a file exists, so a run killed by the deadline, or
+by a reboot, does not wedge the job permanently the way a plain
+`mkdir`-or-lockfile guard would. The `trap` still removes the lock on a clean exit;
+the pid check is the backstop for when there is no clean exit.
+
+With `brew install coreutils` the original spelling works as
+`flock -n /tmp/yt-digest.lock gtimeout 600 aside exec`. Prefer the base-system form
+for anything unattended, since a scheduled job should not depend on a Homebrew
+package staying installed.
 
 ## Aside remembers on its own
 
@@ -154,5 +185,7 @@ first or report the failure clearly rather than silently producing nothing.
 
 Nobody is at the keyboard. A prompt that invites a question produces a process
 that waits forever, and the scheduler cheerfully starts another one on the next
-tick. The three standing clauses plus `timeout` plus `flock` are what keep an
-unattended job from turning into a pile of stuck processes.
+tick. The three standing clauses plus a deadline plus a lock are what keep an
+unattended job from turning into a pile of stuck processes. On macOS that means
+`perl -e 'alarm ...'` and `shlock`, not `timeout` and `flock`, neither of which the
+system provides.

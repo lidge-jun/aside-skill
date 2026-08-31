@@ -128,6 +128,13 @@ suspends the run awaiting a human verdict while the CLI waits on a promise with 
 timeout, and the CLI protocol has no verb that can answer. No flag disables this,
 so the skill prevents it with a fixed prompt contract and a mandatory host timeout.
 
+That deadline is spelled for macOS, which is the only platform Aside runs on. macOS
+ships neither `timeout` nor `flock`, and the failure is quiet: `timeout 300 aside
+exec` exits 127 before `aside` starts, so the guard against a silent hang is itself
+missing on every stock machine. The skill uses `perl -e 'alarm ...'` for the
+deadline and `shlock` for the scheduling lock, both base-system tools, both checked
+against a real hang and a real stale lock.
+
 It also routes work between the two surfaces. `exec` delegates to Aside's agent for
 logins, judgment, and Aside's own builtin skills. `repl` is a Playwright-style
 surface Codex drives directly, and it fails fast on a bad path instead of hanging.
@@ -139,9 +146,14 @@ outside path.
 
 ## Requirements
 
+macOS, since Aside ships only a `Mach-O` CLI and its daemon needs the GUI app.
 Aside installed with its CLI on `PATH`, and at least one signed-in account. Verify
 with `aside account list`.
 
+No Homebrew packages are required. The shell commands use `perl` and `shlock` from
+the base system, so nothing needs installing; `coreutils` is mentioned only as an
+optional way to get the GNU spellings back.
+
 The skill was built against CLI `1.26.810.1915` and daemon `1.26.829.1514` on
-macOS. Offsets cited in the research notes are build-specific; the behavioral rules
-are not.
+macOS 27.0 arm64. Offsets cited in the research notes are build-specific; the
+behavioral rules are not.
