@@ -46,8 +46,21 @@ Two different 15-minute values exist and are easy to confuse.
 configurable. `EPHEMERAL_SESSION_RETENTION_MS` deletes the session itself, is
 hardcoded, and cannot be changed.
 
-One upside: suspended sessions left behind by a hang are ephemeral too, so they
-purge themselves rather than accumulating forever.
+The purge does not clean up after a hang, though. Its query only touches terminal
+statuses:
+
+```js
+TERMINAL_SESSION_STATUSES = ['idle', 'errored', 'interrupted', 'aborted']
+// purgeEphemeralSessions(): where ephemeral = true
+//   and status in TERMINAL_SESSION_STATUSES
+//   and archivedAt is null
+//   and updatedAt < now - EPHEMERAL_SESSION_RETENTION_MS
+```
+
+`suspended` is not in that list, so a hung session is refused on resume and still
+kept as a row. A count on `state.db` found nine of them, the oldest 14.4 hours past
+its `updated_at`, every one `ephemeral = 1`. Expect them to pile up and clear them
+yourself; see the hang section of the main skill.
 
 There is also nothing useful to stash in the account root on the session's behalf.
 A session lives in `state.db` under a daemon-managed id, not in a file you can save
