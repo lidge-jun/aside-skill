@@ -143,6 +143,13 @@ Reach for **repl** when you already know what to do. It is a Playwright-style
 surface and you control every step. It is also the safer choice for file work,
 because the repl filesystem throws immediately on a bad path instead of hanging.
 
+repl shares the signed-in profile, so it is not a private window. A fresh CLI repl
+starts with no attached tabs, which reads like an empty browser, but `openTab`
+inherits the account's cookies: opening `x.com/home` landed on the signed-in
+timeline rather than a login wall, verified against CLI `1.26.810.1915` with daemon
+`1.26.829.1514`. If a repl tab does come up signed out on an older build, update
+Aside before working around it.
+
 If a task is mostly mechanical with one authenticated step, do the authenticated
 part with exec and the rest with repl.
 
@@ -205,6 +212,14 @@ files under `~/.aside/u/0/` instead of threading a session, and let Aside's own
 memory store hold what is generally true. See
 [references/scheduling.md](references/scheduling.md) before putting `exec` in cron
 or a LaunchAgent.
+
+Scheduling needs no machinery beyond that. Point cron or a LaunchAgent straight at
+`aside exec` with a full prompt, wrap it in `timeout` and `flock`, and let each
+tick be a complete run. Session ids are not worth saving to disk, because they stop
+resolving after the purge window. Aside's memory store has room to spare - a store
+in daily use sat at 7.4MB with 217 index entries - so let it accumulate what is
+generally true and keep per-job bookkeeping in your own files under the account
+root.
 
 Account selection is deliberately missing from that list. Every path rule here is
 written for account `u0`, whose root is `~/.aside/u/0/`. Another account moves the
