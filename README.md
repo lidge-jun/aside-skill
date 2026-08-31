@@ -9,6 +9,12 @@ login, and it also makes it easy to hang: a non-interactive `aside exec` cannot
 answer a permission prompt or a question, so it waits forever with no error output.
 This skill encodes the rules that avoid that.
 
+It also covers research behind a login, which is the thing Aside can do that a hosted
+web search cannot. The same X search URL returned 289KB with no tweet markup to
+`curl`, a sign-in wall to a browser with no session, and a full tree of results to a
+signed-in Aside repl. `aside-jun/references/deep-research.md` splits that work between
+Codex, repl, and exec and gives the recipes.
+
 It is also checked against Aside's own guidance rather than written beside it. Aside
 ships an `aside-browser` skill as a string constant inside its daemon binary; every
 normative line in it was extracted and classified, 77 rows in total, and the result
@@ -104,7 +110,8 @@ nothing to `/plugin install` here.
 aside-jun/            the skill itself - this is what gets installed
   SKILL.md            entrypoint: hang rules, exec contract, repl routing
   agents/             UI metadata
-  references/         permissions, repl API, builtin catalog, superseded skill
+  references/         permissions, repl API, deep research, credentials,
+                      scheduling, builtin catalog, superseded skill
   scripts/            regenerate the builtin-skill catalog after an Aside update
 devlog/               how the skill was researched and built
 ```
@@ -125,7 +132,9 @@ It also routes work between the two surfaces. `exec` delegates to Aside's agent 
 logins, judgment, and Aside's own builtin skills. `repl` is a Playwright-style
 surface Codex drives directly, and it fails fast on a bad path instead of hanging.
 
-`references/permissions.md` documents the mechanism with reproduction commands.
+`aside-jun/references/permissions.md` documents the mechanism with reproduction
+commands, including the grant-run-restore sequence for the rare task that needs an
+outside path.
 `devlog/_plan/260830_aside-skill/000_research.md` has the full binary analysis.
 
 ## Requirements

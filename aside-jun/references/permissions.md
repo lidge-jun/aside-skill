@@ -151,3 +151,87 @@ account had the whole home directory temporarily added to both root lists, showe
 reading the workspace file successfully. Re-running after that setting was removed
 produced the denial above. So the Seatbelt profile does track the configured roots
 to some degree; what it does not do is ask.
+
+## Granting a path on purpose
+
+
+When the task genuinely needs a specific outside path, widen the roots first
+rather than hoping. `aside.settings.set` writes the account permission config, and
+a session created afterwards picks it up:
+
+```bash
+# 1. save what is already configured - do not skip this
+# 2>/dev/null drops the CLI's timing line; head -1 keeps just the JSON
+aside repl "console.log(JSON.stringify(aside.settings.get('permission').files))" \
+  2>/dev/null | head -1 > /tmp/aside-roots.json
+cat /tmp/aside-roots.json
+
+# 2. grant, adding to the saved lists rather than replacing them.
+# Grant reads only, or reads and writes - but match what the clause allows.
+aside repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
+n.files.readableRoots=[...n.files.readableRoots,'<abs-path>']; \
+n.files.writableRoots=[...n.files.writableRoots,'<abs-path>']; \
+aside.settings.set('permission',n); \
+console.log(JSON.stringify(aside.settings.get('permission').files))"
+
+# 3. run, with the granted-root variant of the clauses
+timeout 300 aside exec "<task using that path> <clauses, first one naming both roots>"
+
+# 4. restore the saved values, not empty lists
+aside repl "const saved=$(cat /tmp/aside-roots.json); \
+const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
+n.files.readableRoots=saved.readableRoots; n.files.writableRoots=saved.writableRoots; \
+aside.settings.set('permission',n); \
+console.log(JSON.stringify(aside.settings.get('permission').files))"
+```
+
+Step 1 is not optional. Restoring to `[]` would silently delete roots the user had
+configured before you arrived, which is a worse outcome than the hang you were
+avoiding.
+
+The round trip was run as written. Saved `{"readableRoots":[],"writableRoots":[]}`,
+granted both lists, then an `exec` run wrote and read a file under the granted path:
+`write_file` returned `Successfully wrote` and `read_file` returned the contents, in
+seconds, with no suspension. Restoring put the original empty lists back.
+
+That is the proof the grant has to cover writes: with the path in `readableRoots`
+only, the same `write_file` would have met `outsideWrite: "ask"` and parked. The
+spread in step 2 is what makes it additive; assigning a bare array there is the other
+bug this sequence exists to avoid.
+
+While a grant is live, the first standing clause has to name the granted path too,
+or the prompt forbids the very access you just arranged. The clause and the grant
+must cover the same operations: `outsideWrite` stays `ask`, so a path present only in
+`readableRoots` still suspends on a write.
+
+```text
+Use read_file, write_file and edit_file only under ~/.aside/u/0/ and <abs-path>. For
+any other local path use the bash tool instead - never the file tools.
+```
+
+For a read-only task, drop `writableRoots` from step 2 and narrow the clause to
+match:
+
+```text
+Use read_file only under ~/.aside/u/0/ and <abs-path>, and write_file and edit_file
+only under ~/.aside/u/0/. For any other local path use the bash tool instead - never
+the file tools.
+```
+
+Revert to the plain clause as soon as the grant is restored.
+
+Verified: with a single project directory granted this way, `read_file` on a
+file there returned its contents immediately instead of hanging. Note
+`settings.set` returns `undefined` even on success, so read the value back rather
+than trusting the return.
+
+Three cautions. Roots are read at session creation, so grant before launching and
+never mid-run. Always restore afterwards, in the same turn, so a broad grant does
+not outlive the task. And widening the roots is a change to the user's security
+posture: do it when the task requires that path, tell the user which path you
+granted and that you restored it, and ask first when the scope is broad
+(a whole home directory, or `/`) rather than a specific directory.
+
+The cheaper move is usually to avoid the grant entirely. Aside can write its
+output under `~/.aside/u/0/` and Codex, which has full filesystem access, copies it
+wherever it belongs.
