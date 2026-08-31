@@ -29,6 +29,18 @@ Three ways to cause it, all observed:
 That applies to the file tools, `read_file`, `write_file`, and `edit_file`. They go
 through a permission check that can suspend.
 
+Still true on CLI `1.26.810.1915` with daemon `1.26.829.1514`, re-verified rather
+than assumed. The guard config is unchanged:
+
+```json
+{"readableRoots":[],"writableRoots":[],"outsideRead":"ask","outsideWrite":"ask"}
+```
+
+`ask` is the mechanism. An exec run told to `read_file` a workspace path printed the
+tool-call line and then produced nothing further; the process was still parked when
+killed by hand. No flag turns `ask` into `deny`, so the prompt clauses remain the
+only prevention.
+
 `bash` does not. It runs under a separate `sandbox-exec` Seatbelt profile that
 denies rather than asks, so a blocked path returns
 `Operation not permitted` on stderr immediately and the run continues. That makes
@@ -152,6 +164,34 @@ Aside before working around it.
 
 If a task is mostly mechanical with one authenticated step, do the authenticated
 part with exec and the rest with repl.
+
+### What repl can automate on its own
+
+repl is more than a DOM driver. Several builtin capabilities are plain globals with
+their methods on the prototype, so `Object.keys` shows `{}` and you have to look at
+`Object.getPrototypeOf` to see them. Confirmed present in a CLI repl session:
+
+| Global | Reach |
+|---|---|
+| `twitter` | `getMe`, `getTimeline`, `search`, `tweet`, `reply`, `like`, `sendDm`, `follow`, `getNotifications` |
+| `gmail` | `getInbox`, `search`, `getThread`, `openComposer`, `downloadAttachment` |
+| `youtube` | `search`, `getMetadata`, `getTranscript`, `getComments` |
+| `applePasswords` | `requestAuth`, `verifyAuth`, `listLogins`, `autofillLogin`, `getOtps` |
+| `captcha` | `click`, `drag`, `readText` |
+| `cua` | `click`, `type`, `scroll`, `keypress`, `getVisibleScreenshot` |
+| also | `notion`, `slack`, `linkedin`, `googleDocs`, `googleSheets`, `googleSearch`, `imagegen`, `chrome` |
+
+So a scheduled scrape, a DM, a transcript pull, or a CAPTCHA click needs no exec at
+all. Reach for exec when the task needs judgment about what to do next, not merely
+the ability to do it.
+
+**Signing in is the exception.** Aside's own credential vault is `passwordManager`,
+and it is injected into the `repl` **tool inside an exec run** only - it is
+`undefined` in a CLI `aside repl` session. `applePasswords` is the reverse: present
+in CLI repl, and its `listLogins` returned `[]` for every site tried even with 319
+items in the vault. The practical rule is that a login you want automated goes
+through exec, which then uses its repl tool to search the vault and autofill. See
+[references/credentials.md](references/credentials.md) for the verified run.
 
 ## exec
 

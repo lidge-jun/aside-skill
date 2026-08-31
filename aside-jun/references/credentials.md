@@ -123,6 +123,42 @@ Practical consequence: unlock `applePasswords` from repl yourself before
 delegating, or let `exec` use `passwordManager` and the provider skills. Do not
 ask `exec` to perform the Apple Passwords key ceremony.
 
+### The unlock outlives the session
+
+Worth knowing before you plan around the PIN: `verifyAuth` is not per-session. A
+CLI repl called `requestAuth()`, a human read the 6-digit code off the macOS
+prompt, and `verifyAuth('<code>')` returned `{"status":"authenticated"}`. Every
+later call - new repl processes, and `exec` runs after them - went straight
+through with no second prompt. The key is held at the account level, bounded by
+`autoLockTimeout`, not by the process that unlocked it.
+
+So the ceremony is genuinely once. Do it by hand, then delegate freely.
+
+`applePasswords.listLogins` takes a `url` and returned `[]` for every site tried,
+even with 319 items in the vault. That is the external-provider bridge reporting
+nothing, not an empty vault. The vault contents are reachable through
+`passwordManager` instead, which is why the surface split matters in practice
+rather than only on paper.
+
+### Verified: exec fills a login form end to end
+
+One `exec` run, repl tool only, no browser tab opened by hand:
+
+```js
+await passwordManager.listVaults();                    // [{vaultId, name:"Personal"}]
+await passwordManager.listItems({ text: 'nid.naver.com', category: 'login' });
+await passwordManager.autofillItem(page, '<itemId>');
+```
+
+`listItems` returned nine Naver logins with titles, usernames, and hosts and no
+secret values. `autofillItem` filled the form: the snapshot afterwards showed the
+ID textbox holding the chosen username and the password textbox holding
+`[redacted]`. The agent never saw the password and neither did the transcript.
+
+That is the shape to copy. Search, choose by username or host, autofill, then
+re-snapshot to confirm. `autofillItem` returns nothing useful, so the snapshot is
+the verification step, not the return value.
+
 ## Passkeys
 
 Passkey assertion is designed to require a human gesture. Even with passkeys
