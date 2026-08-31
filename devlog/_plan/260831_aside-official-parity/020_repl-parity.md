@@ -51,6 +51,17 @@ is actually needed. State that `fs` cannot browse `~/Downloads` and that a one-s
 
 ## Missing globals and error strings
 
+## Carried to 030
+
+Ledger row 11, "give the user a status update about every 60 seconds", is exec
+operating guidance rather than repl surface, so it belongs in SKILL.md's exec
+section. wp2 closed before this was noticed; 030 picks it up so the rule is not
+silently dropped.
+
+Rows 16-18 are covered but thin: the attach calls are described by what they do to
+session state, which is the part that actually matters, without restating every
+return field.
+
 Document `page.pdf(options?)` (Chromium printToPDF options, `printBackground`
 defaults true), `annotatedScreenshot(page): {base64Image}` with no options,
 `display(input, context?)` accepting base64, data urls, `Uint8Array`/`Buffer`, and
