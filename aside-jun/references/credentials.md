@@ -1,8 +1,8 @@
 # Credentials and first-run setup
 
 Aside can sign in to sites for you, but the credential layer has a first-run trap
-that will hang a CLI run if it is not settled beforehand. Read this before asking
-`exec` to log in anywhere.
+that parks a CLI run (or, on 1.26.902, ends it unanswered) if it is not settled
+beforehand. Read this before asking `exec` to log in anywhere.
 
 ## The trap
 

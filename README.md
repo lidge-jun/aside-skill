@@ -21,8 +21,9 @@ ships an `aside-browser` skill as a string constant inside its daemon binary; ev
 normative line in it was extracted and classified, 77 rows in total, and the result
 is in `devlog/_plan/260831_aside-official-parity/001_parity-ledger.md`. Three of
 those rows were places this skill was wrong and have been fixed. One is a place
-Aside's own advice deadlocks a CLI run - "ASK USER AS THE LAST RESORT" - and is
-deliberately overridden. The rest of the official protocol is now carried here, so
+Aside's own advice, "ASK USER AS THE LAST RESORT", ends a CLI run with nothing
+done and is deliberately overridden. The rest of the official protocol is now
+carried here, so
 you should not need to read both.
 
 ## Install

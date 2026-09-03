@@ -201,9 +201,10 @@ bash: printf ok > /tmp/_probe.txt && ls -la /tmp/_probe.txt
 The same workspace path through `read_file` hung indefinitely on that build and is
 denied by policy on 1.26.902.
 
-Two consequences worth holding onto. First, `bash` is the right tool when a path
-might be outside the roots, because a visible denial is strictly better than a
-silent deadlock. Second, the Seatbelt boundary is not the same boundary as the
+Two consequences worth holding onto. First, under `guard` `bash` is the right tool
+when a path might be outside the roots, because a visible denial beats a silently
+skipped step (or, through 1.26.831, a silent deadlock). Second, the Seatbelt
+boundary is not the same boundary as the
 permission roots: `/etc/hosts` and `/tmp` were reachable while a workspace file was
 not, so do not assume "bash works" means "bash reaches everything."
 
