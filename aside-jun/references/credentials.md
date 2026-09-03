@@ -69,11 +69,15 @@ aside repl "try{const l=await applePasswords.listLogins();console.log('UNLOCKED'
 **2. Leave "Unlock with Touch ID" OFF.** In the Apple Passwords settings there is an
 option along the lines of *Unlock the vault with your biometrics*. Keep it
 disabled. With it off, the 6-digit PIN you set in step 1 is all the vault needs and
-agent-driven sign-in works normally. Turn it on and every unlock demands a live
-fingerprint, which an agent cannot supply, so a once-per-setup ceremony becomes a
-prompt that blocks every future run. Aside 1.26.822 notes that Touch ID is skipped
-after a passkey dialog; whether that removes the first-run handshake described here
-is unverified on 1.26.902, so keep the setting off until a probe shows otherwise.
+agent-driven sign-in works normally. Turning it on re-arms a gate an agent cannot pass.
+The daemon makes the mechanism concrete: `checkPasswordVerificationRequired` returns
+false immediately while `biometricUnlockEnabled` is false, and once the setting is on it
+re-arms a password re-verification every `accountPasswordVerificationInterval` days
+(30 on this account) - a prompt no non-interactive run can answer. Verified against
+daemon 1.26.903.1631. Aside 1.26.822 notes that Touch ID is skipped after a passkey
+dialog, but that is the OS passkey sheet, not the Apple Passwords first-run handshake
+described here, and no Touch-ID symbol survives in the daemon bundle, so it stays
+unverified and the setting stays off.
 
 The stored form is `biometricUnlockEnabled` in
 `~/.aside/u/0/passwords/settings.json`. Confirm it reads `false`:
@@ -84,6 +88,9 @@ python3 -c "import json;print(json.load(open('$HOME/.aside/u/0/passwords/setting
 
 PIN is a one-time setup. Biometrics is a permanent gate. Off is the working
 configuration.
+
+The reasoning behind that instruction, including the daemon predicate it rests on, is in
+`devlog/_plan/260903_parity-and-probes/001_probe-remote-and-touchid.md`.
 
 Also worth checking once: `autoLockTimeout` in the same file is in minutes
 (`10080` is a week). A short timeout means the vault re-locks between runs and the

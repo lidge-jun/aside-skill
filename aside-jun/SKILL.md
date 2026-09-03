@@ -348,10 +348,12 @@ root to `~/.aside/u/<n>/` and silently invalidates the clauses, turning the safe
 path into an outside path that `guard` denies. If another account is genuinely
 needed, substitute its root everywhere in the clauses first.
 
-Remote Control exists on the same surface: `--host <id>`, `aside host list|use|status`,
-and `aside login --email` route a run to another machine on Pro and Max plans. On this
-account `aside host list` returned 403, so they are recorded here as present and
-unverified.
+Remote Control routes a run to another machine: `aside host list|use|status`, `--host <id>`
+on `exec` and `repl`, and `aside login` once, after which the local GUI app need not be
+running. `aside host list` answers locally here - `{"defaultHost":"local","hosts":[]}` - because no
+host is enrolled; the daemon reads that from `<account-root>/remote-control.json`, absent on
+this machine. Enrolling registers this desktop with Aside's API, so this skill has not
+tried it; whether a paid plan gates it is unknown.
 
 ## repl
 
@@ -452,12 +454,10 @@ it after an Aside update with `scripts/refresh-builtin-summary.sh`.
 
 ## Verify what it tells you
 
-The agent narrates its own success and is sometimes wrong. Confirm independently
-before reporting: re-open the page and read the status line, check the file
-yourself, run `dig` against the DNS record it claims to have set. Screenshots land
-under `~/.aside/u/<account>/sessions/<session>/tmp/` and are real files you can
-open. A first attempt can fail and a retry succeed, so ask for the final state
-rather than trusting the first report.
+The agent narrates its own success and is sometimes wrong. Confirm independently:
+re-open the page, check the file, run `dig` against the record it claims to have set.
+Screenshots land under `~/.aside/u/<account>/sessions/<session>/tmp/` as real files.
+A retry can succeed after a failure, so ask for the final state, not the first report.
 
 ## When something goes wrong
 
