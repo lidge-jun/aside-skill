@@ -4,6 +4,13 @@ Every normative statement in the official `aside-browser` SKILL.md, classified
 against `aside-jun`. Line references point at the state of the files BEFORE the
 010/020 corrections land, so they are a snapshot of what the audit found.
 
+> **Superseded (2026-09-03).** This ledger classifies the official `aside-browser` **v1**
+> (165 lines) against the pre-1.26.902 `aside-jun`. Both sides have since been rewritten:
+> the official skill is now v2 (103 lines) and `aside-jun` follows CLI 1.26.902. The
+> current ledger is `devlog/_plan/260903_parity-and-probes/000_parity-ledger-v2.md`
+> (PRESENT 47 / MISSING 20 / CONTRADICTS-CORRECTLY 8 / CONTRADICTS-WRONGLY 2). Keep this
+> file as the v1 snapshot; do not act on its counts.
+
 | verdict | count |
 |---|---|
 | PRESENT | 26 |
