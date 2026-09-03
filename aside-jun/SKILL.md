@@ -10,10 +10,10 @@ against the user's real, logged-in profile, which makes it the right tool when a
 task genuinely needs an existing session: admin consoles, dashboards behind SSO,
 DMs, anything where a plain HTTP fetch gets a login wall.
 
-Aside is macOS-only: the CLI is a `Mach-O` binary and the daemon needs the GUI app.
-A stock macOS machine has neither `timeout` nor `flock`, so every command here
-uses the base-system `perl -e 'alarm ...'` and `shlock` instead; see the deadline
-section for why that is load-bearing.
+Aside is macOS-only: the CLI is a `Mach-O` binary and a local run needs the GUI app
+running; for remote-host commands it need not be (see Remote Control below).
+A stock macOS machine has neither `timeout` nor `flock`, so every command here uses
+the base-system `perl -e 'alarm ...'` and `shlock`; the deadline section says why.
 
 ## The rule that matters
 

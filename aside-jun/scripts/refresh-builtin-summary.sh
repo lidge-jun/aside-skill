@@ -74,6 +74,10 @@ fi
   echo "body with \`aside skills show <name>\`; \`aside skills list\` prints the subset marked"
   echo "\`CLI listed\` below."
   echo
+  echo "Check this list before driving a site by hand with \`snapshot()\`: a matching skill usually"
+  echo "reaches an API and skips the DOM entirely. When you use one, tell the user which skill"
+  echo "and why."
+  echo
   echo "$top_count top-level skills and $site_count site-specific skills."
   echo
   echo "The \`Backing\` column says how the skill works. A \`repl global\` skill documents a JavaScript"

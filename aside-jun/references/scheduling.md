@@ -45,6 +45,14 @@ So `aside session resume <id>` works for a quick follow-up within the window and
 not for scheduling. The `--session` flag itself was removed in 1.26.902. Do not
 build a cron job around resuming yesterday's session.
 
+Inside that window the control verbs are worth knowing. `aside session resume <id> "<prompt>"`
+runs one turn and exits; `aside session resume <id>` with no prompt opens an interactive
+session with `>`, `/session`, and `/exit`, which is not something a script wants.
+`aside session steer <id> "<text>"` redirects the running turn and
+`aside session queue <id> "<text>"` schedules an instruction after the current step; both
+print `ok` and exit, so neither waits for the run. `aside session archive <id>` and
+`aside session delete <id>` clear a finished or unwanted session.
+
 Two different 15-minute values exist and are easy to confuse.
 `agentTabs.closeAfterIdleMinutes` in `settings.json` closes idle agent tabs and is
 configurable. `EPHEMERAL_SESSION_RETENTION_MS` deletes the session itself, is
@@ -173,7 +181,10 @@ after enough sessions (`dreamingMinHours`, `dreamingMinSessions`).
 
 The same store is readable from the CLI: `aside memory path` prints the directory
 (`~/.aside/u/0/memory` on this account), `aside memory list` and `show <id>` browse
-entries, and `aside memory search <query>` runs the recall the agent uses.
+entries, and `aside memory search <query>` runs the recall the agent uses. Add
+`--json` to `search` and `list` when the output feeds a program rather than a reader.
+Aside's own guidance is to recall before asking: check this store for prior context
+before putting the question to the user.
 
 This is not theoretical. After the experiments behind this skill, Aside had
 written its own notes into `memory/MEMORY.md`:
@@ -189,8 +200,10 @@ root will capture to session tmp and `cp` it across without being told.
 
 The layout is `MEMORY.md` (briefing), `USER.md`, `TAXONOMY.md`, plus `agent/`,
 `projects/`, `routines/`, `sites/`, `users/`, `episodic/`. It is a real directory
-under the account root, so you can read it yourself, and a scheduled job can write
-durable facts into `projects/` for later runs to recall.
+under the account root, so you can read it yourself - but never write into it. Aside
+owns these files and consolidates them on its own schedule; an outside write fights
+that. When a run should remember something durably, say so in the exec prompt and let
+the agent record it. Keep your own job bookkeeping in `jobs/` instead, which is yours.
 
 There is plenty of room in it. A store in active daily use measured 7.4MB with 217
 entries in `memory-index.json`, a month of `episodic/` day files, and ten

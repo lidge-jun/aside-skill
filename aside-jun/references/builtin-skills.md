@@ -7,6 +7,10 @@ Aside owns these and ships updates with the app; re-run the script after an Asid
 body with `aside skills show <name>`; `aside skills list` prints the subset marked
 `CLI listed` below.
 
+Check this list before driving a site by hand with `snapshot()`: a matching skill usually
+reaches an API and skips the DOM entirely. When you use one, tell the user which skill
+and why.
+
 34 top-level skills and 16 site-specific skills.
 
 The `Backing` column says how the skill works. A `repl global` skill documents a JavaScript
