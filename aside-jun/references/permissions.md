@@ -241,7 +241,7 @@ aside.settings.set('permission',n); \
 console.log(JSON.stringify(aside.settings.get('permission').files))"
 
 # 3. run, with the granted-root variant of the clauses
-timeout 300 aside exec "<task using that path> <clauses, first one naming both roots>"
+perl -e 'alarm shift; exec @ARGV' 300 aside exec "<task using that path> <clauses, first one naming both roots>"
 
 # 4. restore the saved values, not empty lists
 aside repl "const saved=$(cat /tmp/aside-roots.json); \

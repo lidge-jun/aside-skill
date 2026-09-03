@@ -1,6 +1,6 @@
 ---
 name: aside-jun
-description: Drive the Aside browser CLI for work that needs a real signed-in browser - reading pages behind a login, automating multi-step web flows, and delegating browser tasks to Aside's own agent. Use when a session or cookies are required and an HTTP fetch would fail; not for ordinary public-page fetching or local browser QA.
+description: Drive the Aside browser CLI on macOS for work that needs a real signed-in browser - reading pages behind a login, automating multi-step web flows, and delegating browser tasks to Aside's own agent. Use when a session or cookies are required and an HTTP fetch would fail; not for ordinary public-page fetching or local browser QA.
 ---
 
 # Aside
@@ -9,6 +9,11 @@ Aside is a Chromium fork with a built-in browser agent. Its CLI drives that agen
 against the user's real, logged-in profile, which makes it the right tool when a
 task genuinely needs an existing session: admin consoles, dashboards behind SSO,
 DMs, anything where a plain HTTP fetch gets a login wall.
+
+Aside is macOS-only: the CLI is a `Mach-O` binary and the daemon needs the GUI app.
+A stock macOS machine has neither `timeout` nor `flock`, so every command here
+uses the base-system `perl -e 'alarm ...'` and `shlock` instead; see the deadline
+section for why that is load-bearing.
 
 ## The rule that matters
 
@@ -57,7 +62,7 @@ so treat its reach as configuration-dependent rather than as a rule.
 for exec runs:**
 
 ```bash
-timeout 300 aside exec --permission full-access "<prompt>"
+perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access "<prompt>"
 ```
 
 With it the file tools reach paths that `guard` denies (probe B: `read_file` on
@@ -81,8 +86,27 @@ credential-manager handshake, and it can simply take long.
 Always run under a host deadline:
 
 ```bash
-timeout 300 aside exec --permission full-access "<prompt>"
+perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access "<prompt>"
 ```
+
+That command is deliberately not `timeout 300`. **macOS has no `timeout`**, and the
+obvious spelling does not fail safe: `command not found` exits 127 before `aside`
+is ever invoked, so the run it was meant to bound never started. Confirmed on macOS
+27.0 arm64, where `timeout`, `gtimeout`, and `flock` are all absent without
+Homebrew `coreutils`. `perl` is in the base system and its `alarm` form behaves the
+way the safeguard needs:
+
+| Property | Measured |
+|---|---|
+| Fires at the deadline | `alarm 2` on `sleep 30` returned at 2.009s |
+| Reports the kill distinctly | exit `142`, which is `128 + SIGALRM` |
+| Passes a normal exit through | child `exit 7` surfaced as `7` |
+
+`exec` replaces the shell with `aside` in the same process and the `alarm` timer
+survives that, so the deadline lands on the CLI itself. It was verified against a
+real parked run on an older build (a clause-stripped `read_file` killed at 30.2s), not
+only against `sleep`. `brew install coreutils` provides `gtimeout` if you prefer
+the documented spelling; do not assume it is present.
 
 A fired timeout kills the CLI, not the work already done: files written,
 downloads, form submissions, messages sent all stand. **Inspect the real state
@@ -152,6 +176,8 @@ signs in once in the Aside window and `exec` inherits the live session.
 Reach for **repl** when you already know what to do. It is a Playwright-style
 surface and you control every step. It is also the safer choice for file work,
 because the repl filesystem throws immediately on a bad path instead of skipping it.
+A task that is mostly mechanical with one authenticated step does that step with
+exec and the rest with repl.
 
 repl shares the signed-in profile, so it is not a private window. A fresh CLI repl
 starts with no attached tabs, which reads like an empty browser, but `openTab`
@@ -160,16 +186,12 @@ timeline rather than a login wall, verified against CLI `1.26.902.1732` with dae
 `1.26.902.1713` (signed-in discord.com and aside.com tabs on 2026-09-02). If a repl
 tab does come up signed out on an older build, update Aside before working around it.
 
-If a task is mostly mechanical with one authenticated step, do the authenticated
-part with exec and the rest with repl.
-
 ### Research behind a login
 
 Ordinary research does not need Aside; a hosted web search plus opening the page is
-cheaper for anything public. Aside earns its place when the sources are gated. The
-same X search URL, opened three ways: `curl` with no session returned 289KB with zero
-tweet markup, a rendering browser with no session returned a sign-in wall, and a CLI
-repl on the signed-in profile returned a 15063-char tree of actual results.
+cheaper for anything public. Aside earns its place when the sources are gated: the
+same X search URL gave `curl` 289KB with zero tweet markup, a sessionless browser a
+sign-in wall, and a CLI repl on the signed-in profile a 15063-char tree of results.
 
 The split follows from that. Codex discovers and synthesises, repl proves what needs
 cookies and queries the service APIs directly, exec handles anything needing an
@@ -223,7 +245,7 @@ reasonable option and continue, or report exactly what blocked you and stop.
 Assembled:
 
 ```bash
-timeout 300 aside exec --permission full-access "Go to <url> and <task>. Report <fields>.
+perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access "Go to <url> and <task>. Report <fields>.
 Write and edit files only under ~/.aside/u/0/. Read other local paths only when
 this prompt names them, and never modify them.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
@@ -277,18 +299,14 @@ with the provider in front, `-m opencodex/xai/grok-4.6`. The split form
 Runs take minutes. Start one, capture the session, then poll:
 
 ```
-exec_command  cmd="timeout 300 aside exec --permission full-access '<prompt>'"  yield_time_ms=30000
+exec_command  cmd="perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access '<prompt>'"  yield_time_ms=30000
 write_stdin   session_id=<id>  chars=""  yield_time_ms=120000
 ```
 
 Empty `chars` polls without typing. If output stops right after a tool-call line
 and stays stopped, that is a parked run rather than slow work; `aside session steer`
-it before the timeout fires.
-
-The user cannot see the Aside CLI's output, so a long run needs narration: tell them
-roughly every 60 seconds what the agent is doing and what it has established. Aside's
-own guidance asks for this and it is the difference between a run that looks alive and
-one that looks hung.
+it before the timeout fires. The user cannot see the Aside CLI's output, so narrate
+a long run: roughly every 60 seconds, what the agent is doing and has established.
 
 Useful options: `--permission full-access` (above), `--effort ultrabrowse` for flows that
 must recover from surprises on their own, and `--log-dump <path>` to record every
@@ -303,22 +321,21 @@ redirected with `aside session steer <id> "<text>"` or handed a follow-up with
 reads the model id stored in the session, which for a routed model comes back
 provider-less and fails with `<model> is not available`.
 
-Resume works for about 15 minutes. CLI sessions are created ephemeral and the
-daemon purges them after that (`EPHEMERAL_SESSION_RETENTION_MS = 9e5`, unchanged in
-1.26.902), so a later resume fails with `Session is pending purge`. That applies to
-sessions created while `save-sessions` is off. With it on (above) new CLI sessions
-are persistent and the purge query's `ephemeral = true` predicate skips them
-(S8-Q5); a resume past 15 minutes on such a session has not been timed yet, so treat
-it as expected rather than proven. For anything scheduled or
-long-running, carry state in files under `~/.aside/u/0/` and let Aside's memory
-store hold what is generally true; `aside memory search <query>`, `list`, `show`, and
-`path` read that store from the CLI. See
-[references/scheduling.md](references/scheduling.md) before putting `exec` in cron
-or a LaunchAgent.
+With `save-sessions` off, resume works for about 15 minutes: CLI sessions are
+created ephemeral and purged after `EPHEMERAL_SESSION_RETENTION_MS = 9e5`
+(unchanged in 1.26.902), so a later resume fails with `Session is pending purge`.
+With it on (above) new sessions are persistent and the purge query's
+`ephemeral = true` predicate skips them (S8-Q5); a resume past 15 minutes on such
+a session has not been timed yet. For anything scheduled or long-running, carry
+state in files under `~/.aside/u/0/` and let Aside's memory store hold what is
+generally true; `aside memory search|list|show|path` read that store from the CLI.
+See [references/scheduling.md](references/scheduling.md) before putting `exec` in
+cron or a LaunchAgent.
 
 Scheduling needs no machinery beyond that. Point cron or a LaunchAgent straight at
-`aside exec` with a full prompt, wrap it in `timeout` and `flock`, and let each
-tick be a complete run. Session ids are not worth saving to disk while
+`aside exec` with a full prompt, wrap it in a deadline and a lock -
+`perl -e 'alarm ...'` and `shlock` on macOS, since `timeout` and `flock` are not
+installed - and let each tick be a complete run. Session ids are not worth saving to disk while
 `save-sessions` is off, because they stop resolving after the purge window; with it
 on they persist, but a fresh run per tick is still the simpler design. Aside's
 memory store has room to spare - a store in daily use sat at 7.4MB with 217 index
@@ -414,7 +431,7 @@ identical to the repl-backed set) and `aside skills show <name>` prints any skil
 body, which is how to learn what a skill will do or to drive its repl global yourself.
 
 ```bash
-timeout 300 aside exec --permission full-access "Use the google-sheets skill to read the totals from <url>.
+perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access "Use the google-sheets skill to read the totals from <url>.
 Report each row label and its total.
 Write and edit files only under ~/.aside/u/0/. Read other local paths only when
 this prompt names them, and never modify them.
@@ -424,11 +441,10 @@ reasonable option and continue, or report exactly what blocked you and stop."
 ```
 
 Naming the skill usually beats describing the workflow, because several of them
-reach an API and never open a tab at all.
-
-`aside skills install` copies Aside's own `aside-browser` skill into a Codex, Claude Code,
-Cursor, or OpenCode skills directory. Do not run it here: this skill replaces it,
-and two skills in one trigger space route unpredictably.
+reach an API and never open a tab at all. `aside skills install` copies Aside's own
+`aside-browser` skill into a Codex, Claude Code, Cursor, or OpenCode skills
+directory; do not run it here, this skill replaces it and two skills in one trigger
+space route unpredictably.
 
 The catalog, including which skills are backed by a repl global you could drive
 yourself: [references/builtin-skills.md](references/builtin-skills.md). Regenerate
@@ -440,10 +456,8 @@ The agent narrates its own success and is sometimes wrong. Confirm independently
 before reporting: re-open the page and read the status line, check the file
 yourself, run `dig` against the DNS record it claims to have set. Screenshots land
 under `~/.aside/u/<account>/sessions/<session>/tmp/` and are real files you can
-open.
-
-A first attempt can fail and a retry succeed, so ask for the final state rather
-than trusting the first report.
+open. A first attempt can fail and a retry succeed, so ask for the final state
+rather than trusting the first report.
 
 ## When something goes wrong
 
