@@ -22,11 +22,13 @@ rather than assumed:
 
 | Cause | through 1.26.831 | 1.26.902, default `guard` |
 |---|---|---|
-| `write_file` outside `~/.aside/u/0/` | hung indefinitely | `Permission denied: write '<path>' is blocked by policy` in ~5s; run continues |
-| `read_file` outside the allowed roots | hung the same way | `Permission denied: read '<path>' is blocked by policy` in ~5s; run continues |
-| `ask_user_question` | rendered, then hung | tool absent from the CLI catalog; the agent reports "no such tool" and exits 0 |
+| `write_file` outside `~/.aside/u/0/` | hung indefinitely | `blocked by policy` in ~5s; run continues |
+| `read_file` outside the allowed roots | hung the same way | `blocked by policy` in ~5s; run continues |
+| `ask_user_question` | rendered, then hung | tool absent from the CLI catalog; agent says so, exits 0 |
 
-Evidence: `devlog/_plan/260902_aside-update-audit/evidence/probe-{A,W,C}-*.log`.
+The full error text is `Permission denied: read '<path>' is blocked by policy`
+(or `write`). Evidence:
+`devlog/_plan/260902_aside-update-audit/evidence/probe-{A,W,C}-*.log`.
 
 The failure changed shape, not severity. A deny is an error the agent reads and
 routes around: in one probe it "did not try other tools", in another it wrote the
@@ -87,9 +89,9 @@ downloads, form submissions, messages sent all stand. **Inspect the real state
 before retrying**, or a rerun duplicates a side effect.
 
 Before letting the timeout fire, reach the run. The id is on the first line the
-CLI prints (`created new session: <id>`). `aside session steer <id> "report what is blocking you and stop"`
-injects an instruction into a running session and `aside session stop <id>`
-ends it cleanly.
+CLI prints (`created new session: <id>`).
+`aside session steer <id> "report what is blocking you and stop"` injects an
+instruction into a running session and `aside session stop <id>` ends it cleanly.
 
 A run that did suspend survives as `status: suspended` with `suspension.kind` of
 `approval` or `ask-user-question`. `aside session list` does not show those: on
@@ -141,7 +143,7 @@ last one revealed.
 
 Before delegating anything that has to **sign in**, read
 [references/credentials.md](references/credentials.md). Aside's credential layer
-has a first-run handshake that hangs a CLI run: Apple Passwords wants a 6-digit
+has a first-run handshake that parks a CLI run: Apple Passwords wants a 6-digit
 code only a human can read off the screen. That reference covers the one-time
 setup, why "Unlock with Touch ID" must stay off, why 1Password is the smoother
 choice, and the Importer's EPERM failure. The reliable pattern is that the user
@@ -211,8 +213,8 @@ through exec, which then uses its repl tool to search the vault and autofill. Se
 Every exec prompt ends with these three clauses, used verbatim:
 
 ```text
-Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
-local path use the bash tool instead - never the file tools.
+Write and edit files only under ~/.aside/u/0/. Read other local paths only when
+this prompt names them, and never modify them.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop.
@@ -222,19 +224,25 @@ Assembled:
 
 ```bash
 timeout 300 aside exec --permission full-access "Go to <url> and <task>. Report <fields>.
-Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
-local path use the bash tool instead - never the file tools.
+Write and edit files only under ~/.aside/u/0/. Read other local paths only when
+this prompt names them, and never modify them.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop."
 ```
 
-The first clause is the important one, and it is a tool rule rather than a path
-rule: the file tools stay inside `~/.aside/u/0/`, and everything else goes through
-`bash`. Reading is no safer than writing here, so the clause covers both. Aside's
-own system prompt tells the agent to "request access once" for outside paths,
-which under `guard` is denied and skipped, and under `full-access` is unnecessary,
-so the override has to be explicit.
+The first clause is the write fence. `--permission full-access` opens the session,
+so the prompt is what keeps Aside's output under its own root and keeps its hands
+off workspace files it was only meant to read: name the paths a task may read, and
+Codex copies results out afterwards. Aside's own system prompt tells the agent to
+"request access once" for outside paths, which under `full-access` is unnecessary
+and under `guard` is denied and skipped, so the override has to be explicit.
+
+Running under `guard` instead? Prefix the clauses with the older fence, `Use
+read_file, write_file and edit_file only under ~/.aside/u/0/. For any other local
+path use the bash tool instead - never the file tools.`, so a denied call never
+silently drops a step. `bash` under `guard` reaches whatever the Seatbelt profile
+allows, which varied between probes, so treat it as best-effort there.
 
 The third clause overrides Aside's own instruction. Its builtin guidance ends the
 login section with "**ASK USER AS THE LAST RESORT**", which is sound advice in the
@@ -401,15 +409,15 @@ Jira, Linear, GitHub, and Trello.
 
 **exec loads them on its own**: name the skill in the prompt and the agent picks it
 up. Codex can also read one before delegating: `aside skills list` prints a
-CLI-listed subset (11 names on 1.26.902, not identical to the repl-backed set) and
-`aside skills show <name>` prints any skill's body, which is how to learn what a
-skill will do or to drive its repl global yourself.
+CLI-listed subset (11 names on 1.26.902, `evidence/probe-K-skills-list.log`; not
+identical to the repl-backed set) and `aside skills show <name>` prints any skill's
+body, which is how to learn what a skill will do or to drive its repl global yourself.
 
 ```bash
 timeout 300 aside exec --permission full-access "Use the google-sheets skill to read the totals from <url>.
 Report each row label and its total.
-Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
-local path use the bash tool instead - never the file tools.
+Write and edit files only under ~/.aside/u/0/. Read other local paths only when
+this prompt names them, and never modify them.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop."
@@ -462,7 +470,8 @@ anything, or each prompt now points outside the allowed roots.
 
 ## Boundaries
 
-Everything Aside writes belongs under `~/.aside/u/0/`. Codex has full filesystem
+Everything Aside writes belongs under `~/.aside/u/0/`, and with `full-access` the
+first prompt clause is the only thing holding that line. Codex has full filesystem
 access of its own, so when a result needs to reach the workspace, let Aside write
 it inside its root and copy it out yourself. Copying out is the default and it is
 almost always enough.
