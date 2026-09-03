@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 fail=0
-n=$(wc -l < aside-jun/SKILL.md); [ "$n" = "499" ] || { echo "SKILL.md $n lines, expected 499"; fail=1; }
+n=$(wc -l < aside-jun/SKILL.md | tr -d ' '); [ "$n" -eq 499 ] || { echo "SKILL.md $n lines, expected 499"; fail=1; }
 rg -q 'daemon needs the GUI app' aside-jun/SKILL.md && { echo "v2-60 stale"; fail=1; }
 rg -q 'for remote-host commands it need not be' aside-jun/SKILL.md || { echo "v2-60 fix missing"; fail=1; }
 for p in 'session archive' 'session delete' '/exit'; do
