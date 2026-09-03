@@ -217,8 +217,8 @@ in `settings.json`:
 
 `episodicRetentionDays: 0` keeps day files indefinitely; consolidation waits for
 both 24 hours and 5 sessions before it runs, so a job firing a few times a day
-feeds it at a comfortable rate. Treat capacity as a non-issue and spend the effort
-on writing memories worth recalling instead of pruning them.
+feeds it at a comfortable rate. Treat capacity as a non-issue and spend the effort on
+giving Aside facts worth recalling instead of pruning what it already kept.
 
 Practical consequence: repeated jobs get better over time without you threading a
 session through them. Let the memory store hold what is generally true, and keep
