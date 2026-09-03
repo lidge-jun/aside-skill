@@ -1,7 +1,8 @@
-# Why Aside CLI hangs, and what actually prevents it
+# Why Aside CLI denies or parks, and what actually prevents it
 
 Background for the rules in SKILL.md. Read this when a rule seems overcautious, or
-when a session hangs and you need to know whether a retry can help. It cannot.
+when a run skipped a step or parked and you need to know whether a retry can help.
+Under `guard` it cannot; under `full-access` the step runs.
 
 ## The mechanism
 
@@ -28,13 +29,67 @@ The result is a deadlock with no error text. The tool-call line prints, then
 silence, until the shell timeout kills the process. A hang is indistinguishable
 from slow work by looking at output.
 
-## The three proven classes
+## What changed in 1.26.902
+
+The suspend path above is still in the daemon bundle (its strings are present in
+1.26.902.1713); whether the Aside window still uses it was not probed. A CLI
+session no longer reaches it under any `--permission` value. Measured on CLI
+`1.26.902.1732` with daemon `1.26.902.1713`, guard config untouched
+(`outsideRead`/`outsideWrite` both `ask`):
+
+| Probe | Result | Log |
+|---|---|---|
+| `read_file` on a workspace file, default mode | `Permission denied: read '<path>' is blocked by policy` after 4.7s, run exits 0 | `evidence/probe-A-guard-readfile.log` |
+| `write_file` to `/tmp` and to `~/.aside/u/0` in one run | outside denied by policy, inside `Successfully wrote`, run exits 0 | `probe-W-writefile.log` |
+| `ask_user_question` | not in the session's tool catalog; the agent says so and exits 0 | `probe-C-askuser.log`, `probe-Q-askuser2.log` |
+| `read_file` on the same workspace file with `--permission full-access` | contents returned in 4.2s | `probe-B-full-readfile.log` |
+| `bash head` on the workspace file and `cat /etc/hosts` | both succeeded (`sandbox.enabled` false on this install) | `probe-D-bash-outside.log` |
+
+The Sep 2 release note says it plainly: "permission / ask user question tool /
+final confirm won't throw an error" (`evidence/aside-discord-changelog-260902.md`).
+For a CLI session `ask` is downgraded to deny and the question tool is removed.
+
+The new failure is quieter than the old one. A denied call returns an error string
+the agent reads; it then either stops ("I did not try other tools") or finishes the
+parts it could. Exit status is 0 either way, so a skipped step is visible only in
+the transcript. That is why SKILL.md now opens the session with `--permission full-access` and
+turns the first prompt clause into a write fence instead of a tool fence.
+
+## The permission flag
+
+```bash
+aside exec --permission full-access "<prompt>"   # default recommendation
+aside exec --permission guard "<prompt>"         # same as omitting the flag
+aside exec --permission ask "<prompt>"           # accepted, but normalizes to guard on 1.26.902
+```
+
+`full-access` is the mode name GUI sessions carry in `state.db`
+(`permission_mode`). From the CLI it let `read_file` reach a workspace path that
+`guard` had denied (probe B); other tools and paths were not exercised, so treat
+it as "the file tools are no longer fenced" rather than as a proof of parity with
+the window. Say in the prompt what a read-only task must not touch and keep
+Aside's own output under `~/.aside/u/0/`.
+
+`guard` fits a task that must not be able to reach the workspace and can afford
+a skipped step; check the transcript for `blocked by policy` afterwards.
+
+`ask` is accepted by CLI 1.26.902 but normalizes to Guard, exactly like `guard`:
+the help text says "--permission ask and --permission guard are the same", and
+outside-root file calls fail fast with `blocked by policy` and do not suspend
+(`evidence/probe-S4-suspension.log`). Genuine approval behaviour in the Aside window
+was not verified by this probe. If a run does park on something else (a
+credential handshake, a passkey), `aside session steer <id>` or `stop <id>` is the
+way out.
+
+## The three classes, as they behaved through 1.26.831
 
 | Class | Trigger | Observed |
 |---|---|---|
 | Write | `write_file` outside the writable roots | Hung past 100s. No error, no file. The same write inside `~/.aside/u/0` finished in ~6s with "Successfully wrote". |
 | Read | `read_file` outside the readable roots | Hung identically. `outsideRead: "ask"` does **not** fail fast. |
 | Question | `ask_user_question` | Rendered the question, then hung. Its own description says "The session will pause until the user responds." |
+
+On 1.26.902 each of these returns an error instead; see above.
 
 ## What the guard mode actually allows
 
@@ -54,9 +109,9 @@ outsideWrite   ask
 
 Both `ask` values are the trap. Anything outside these roots suspends.
 
-## There is no escape flag
+## Flags, then and now
 
-Exhaustively checked against the CLI's option registration. There is no
+Through 1.26.831: exhaustively checked against the CLI's option registration. There is no
 non-interactive flag, no auto-approve, no auto-deny, no JSON output mode, no
 timeout, and no headless flag. No Aside environment variable changes permission
 behavior. CLI session creation reads only `defaultModel` and never touches a
@@ -65,8 +120,11 @@ permission key.
 An `always` approval would call `rememberUserApproval` and widen the session
 roots, but it is unreachable from a CLI because the approval cannot be answered.
 
-**Prevention is therefore prompt-side.** That is the entire reason SKILL.md
-insists on the three clauses.
+1.26.902 added `--permission` (above) and removed `--session`. There is still no
+timeout, no JSON output mode, and no auto-answer for a genuine approval prompt.
+
+**Prevention was therefore prompt-side**, and under `guard` it still is. That is
+the reason SKILL.md keeps the three clauses even with `full-access` as the default.
 
 ## The daemon's own instruction makes it worse
 
@@ -154,6 +212,10 @@ to some degree; what it does not do is ask.
 
 ## Granting a path on purpose
 
+This is the narrow alternative to `--permission full-access`: use it when one
+directory must be reachable and the rest of the filesystem must not be. The steps
+are unchanged on 1.26.902, and the clause variants below are the `guard`-mode
+fence, not the write fence SKILL.md uses under `full-access`.
 
 When the task genuinely needs a specific outside path, widen the roots first
 rather than hoping. `aside.settings.set` writes the account permission config, and

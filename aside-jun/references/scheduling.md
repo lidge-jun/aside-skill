@@ -18,9 +18,10 @@ Each tick is a complete run that starts fresh, does the work, and exits. The onl
 things it needs from the outside are a `timeout`, a lock, and a prompt that cannot
 ask a question. Everything else it can rediscover.
 
-## Sessions expire after 15 minutes
+## Sessions expire after 15 minutes unless saved
 
-CLI-created sessions are ephemeral. The daemon hardcodes:
+CLI-created sessions are ephemeral while `save-sessions` is off (the shipped
+default; this skill turns it on, below). The daemon hardcodes:
 
 ```js
 EPHEMERAL_SESSION_RETENTION_MS = 900 * 1e3   // 15 minutes
@@ -36,10 +37,13 @@ if (isEphemeralPurgePending(session))
 Verified both ways. A CLI session 135 minutes old failed immediately with
 `Error Session is pending purge`, while a GUI-created session seven days old
 resumed normally and answered. The difference is the `ephemeral` flag: the CLI
-sends `ephemeral: true` at session creation, the app does not.
+sends `ephemeral: true` at session creation, the app does not. Re-verified on
+1.26.902: the `9e5` constant and the `Session is pending purge` string are still in
+the daemon bundle.
 
-So `--session` works for a quick follow-up within the window and not for
-scheduling. Do not build a cron job around resuming yesterday's session.
+So `aside session resume <id>` works for a quick follow-up within the window and
+not for scheduling. The `--session` flag itself was removed in 1.26.902. Do not
+build a cron job around resuming yesterday's session.
 
 Two different 15-minute values exist and are easy to confuse.
 `agentTabs.closeAfterIdleMinutes` in `settings.json` closes idle agent tabs and is
@@ -60,13 +64,46 @@ TERMINAL_SESSION_STATUSES = ['idle', 'errored', 'interrupted', 'aborted']
 `suspended` is not in that list, so a hung session is refused on resume and still
 kept as a row. A count on `state.db` found nine of them, the oldest 14.4 hours past
 its `updated_at`, every one `ephemeral = 1`. Expect them to pile up and clear them
-yourself; see the hang section of the main skill.
+yourself; see the parked-run section of the main skill.
 
-There is also nothing useful to stash in the account root on the session's behalf.
-A session lives in `state.db` under a daemon-managed id, not in a file you can save
-and reload, so writing a session handle into `~/.aside/u/0/` buys you a string that
-stops resolving fifteen minutes later. Scripts and state files there are worth
-keeping; session ids are not.
+## Keep CLI sessions on the chat list
+
+`aside settings save-sessions true` puts CLI runs on the Aside chat list. Set it once
+and leave it on; it is the default recommendation of this skill.
+
+Measured on 1.26.902 (002_save-sessions-probe.md, S8):
+
+| What | `save-sessions false` (shipped default) | `save-sessions true` |
+|---|---|---|
+| `~/.aside/u/0/settings.json` | `"cli": {"ephemeral": true}` | `"cli": {"ephemeral": false}` - the only file that changes |
+| new CLI session row in `state.db` | `ephemeral = 1` | `ephemeral = 0` |
+| `aside session list` | `ephemeral` | `persistent` |
+| `aside.sessions.list()` | excluded | included |
+| Aside window, Chats | not listed by policy, though the run made right before the flip was still showing after it | listed, with an unread dot (`evidence/probe-S3-aside-chat-list.png`) |
+| 15-minute purge | applies once the session is terminal | never: the purge query has an explicit `ephemeral = true` predicate |
+
+Existing rows are not rewritten, so sessions created before the flip keep their
+ephemeral flag and their purge deadline. API and window do not agree on those:
+`aside.sessions.list()` excluded the pre-flip baseline while the Chats list showed
+it (`evidence/probe-S3-chat-list.log`), so the database flag is the persistence
+classification and the sidebar is a separate exposure policy.
+
+Whether a parked approval can be answered from the Chats list is still open. On
+1.26.902 an outside-root file approval cannot park a CLI run through
+`--permission ask`: it is the same mode as `guard` and denies, so no fresh
+approval card could be produced (S8-Q4). The older
+suspended rows are purge-pending and refuse `resume` and `steer`.
+
+`aside session list` shows running, idle, interrupted, and aborted CLI sessions and
+hides suspended ones regardless of this setting, so the `state.db` query in SKILL.md
+stays the way to count parked runs.
+
+With `save-sessions` off, there is also nothing useful to stash in the account
+root on the session's behalf. A session lives in `state.db` under a daemon-managed
+id, not in a file you can save and reload, so writing a session handle into
+`~/.aside/u/0/` buys you a string that stops resolving fifteen minutes later.
+Scripts and state files there are worth keeping; session ids are only worth keeping
+once the setting is on, and even then a fresh run per tick is simpler.
 
 ## Carry state in files, not sessions
 
@@ -79,13 +116,13 @@ roots, so the file tools work there without any permission detour.
 JOB=~/.aside/u/0/jobs/youtube-digest
 mkdir -p "$JOB"
 
-flock -n /tmp/yt-digest.lock timeout 600 aside exec "$(cat <<EOF
+flock -n /tmp/yt-digest.lock timeout 600 aside exec --permission full-access "$(cat <<EOF
 Read $JOB/state.md for what you already handled and skip anything listed there.
 Do today's work, append what you handled to $JOB/state.md, and write the output to
 $JOB/$(date +%F).md.
 
-Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
-local path use the bash tool instead - never the file tools.
+Write and edit files only under ~/.aside/u/0/. Read other local paths only when
+this prompt names them, and never modify them.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop.
 EOF
@@ -93,7 +130,7 @@ EOF
 ```
 
 `flock -n` skips the run when the previous one is still going, which matters
-because a hung run never exits on its own. `timeout` bounds it. Both are required,
+because a parked run never exits on its own. `timeout` bounds it. Both are required,
 not optional, for unattended execution.
 
 ## Aside remembers on its own
@@ -102,6 +139,10 @@ Aside keeps a memory store at `~/.aside/u/0/memory/` and gives the exec agent a
 `memory_search` tool whose description begins "Mandatory recall step." With
 `memory.enabled` true in `settings.json`, the daemon consolidates what it learned
 after enough sessions (`dreamingMinHours`, `dreamingMinSessions`).
+
+The same store is readable from the CLI: `aside memory path` prints the directory
+(`~/.aside/u/0/memory` on this account), `aside memory list` and `show <id>` browse
+entries, and `aside memory search <query>` runs the recall the agent uses.
 
 This is not theoretical. After the experiments behind this skill, Aside had
 written its own notes into `memory/MEMORY.md`:
@@ -152,7 +193,7 @@ first or report the failure clearly rather than silently producing nothing.
 
 ## Why the clauses matter more here
 
-Nobody is at the keyboard. A prompt that invites a question produces a process
-that waits forever, and the scheduler cheerfully starts another one on the next
-tick. The three standing clauses plus `timeout` plus `flock` are what keep an
+Nobody is at the keyboard. A prompt that invites a question ends the run with the
+question unanswered, a denied path is skipped without an error exit, and the
+scheduler cheerfully starts another one on the next tick. The three standing clauses plus `timeout` plus `flock` are what keep an
 unattended job from turning into a pile of stuck processes.

@@ -166,8 +166,8 @@ Then answer <question>. For every claim, report the exact URL you read it on and
 the sentence that supports it. Do not summarise a page you did not open.
 Write your notes to ~/.aside/u/0/research/<slug>.md.
 
-Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
-local path use the bash tool instead - never the file tools.
+Write and edit files only under ~/.aside/u/0/. Read other local paths only when
+this prompt names them, and never modify them.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop."

@@ -5,9 +5,10 @@ deadlocking it.
 
 Aside is a Chromium fork with a built-in browser agent, and its CLI runs that agent
 against your real logged-in profile. That makes it useful for anything behind a
-login, and it also makes it easy to hang: a non-interactive `aside exec` cannot
-answer a permission prompt or a question, so it waits forever with no error output.
-This skill encodes the rules that avoid that.
+login, and it also makes it easy to lose work quietly: a non-interactive
+`aside exec` cannot answer a permission prompt or a question, so through 1.26.831
+it waited forever, and since 1.26.902 it denies the call and moves on with exit 0.
+This skill encodes the rules that avoid both.
 
 It also covers research behind a login, which is the thing Aside can do that a hosted
 web search cannot. The same X search URL returned 289KB with no tweet markup to
@@ -118,23 +119,21 @@ devlog/               how the skill was researched and built
 
 ## What it covers
 
-The skill leads with the failure mode, because it is silent and unrecoverable. A
-suspended run prints its tool-call line and then nothing at all, which is
-indistinguishable from slow work.
-
-Three ways to trigger it, all verified against a live install: writing outside the
-allowed roots, reading outside them, and asking the user a question. The daemon
-suspends the run awaiting a human verdict while the CLI waits on a promise with no
-timeout, and the CLI protocol has no verb that can answer. No flag disables this,
-so the skill prevents it with a fixed prompt contract and a mandatory host timeout.
+The skill leads with the failure mode, because it is silent either way. Through
+1.26.831 a suspended run printed its tool-call line and then nothing; on 1.26.902
+an outside-root file call is denied by policy and the run continues, so a skipped
+step shows only in the transcript. Both were verified against a live install.
+`--permission full-access` removes the deny for the paths a task names, and the
+fixed prompt contract plus a host timeout cover the rest.
 
 It also routes work between the two surfaces. `exec` delegates to Aside's agent for
 logins, judgment, and Aside's own builtin skills. `repl` is a Playwright-style
-surface Codex drives directly, and it fails fast on a bad path instead of hanging.
+surface Codex drives directly, and it throws on a bad path, where exec under
+`guard` skips it.
 
 `aside-jun/references/permissions.md` documents the mechanism with reproduction
-commands, including the grant-run-restore sequence for the rare task that needs an
-outside path.
+commands, including the `--permission` flag and the narrower grant-run-restore
+sequence for a task that needs one outside directory.
 `devlog/_plan/260830_aside-skill/000_research.md` has the full binary analysis.
 
 ## Requirements
@@ -142,6 +141,6 @@ outside path.
 Aside installed with its CLI on `PATH`, and at least one signed-in account. Verify
 with `aside account list`.
 
-The skill was built against CLI `1.26.810.1915` and daemon `1.26.829.1514` on
-macOS. Offsets cited in the research notes are build-specific; the behavioral rules
+The skill was rebuilt against CLI `1.26.902.1732` and daemon `1.26.902.1713` on
+macOS (first built on 1.26.810 / 1.26.829). Offsets cited in the research notes are build-specific; the behavioral rules
 are not.

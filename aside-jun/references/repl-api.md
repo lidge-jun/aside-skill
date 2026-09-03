@@ -30,6 +30,9 @@ const active = await attachActiveBrowserTab();
 await closeTab(p);                        // closes owned tabs, detaches borrowed ones
 ```
 
+The CLI's own repl help mentions `getTabs()`; it is `undefined` on 1.26.902, and
+`listBrowserTabs()` is the call.
+
 `page` is a getter for the active page and starts `null` in a fresh CLI repl.
 `tabs` lists session-attached pages. `openTab` waits up to 5 seconds for stability.
 
@@ -285,7 +288,10 @@ Service-specific globals ride the builtin skills: `chrome`, `twitter`, `gmail`,
 `googleAccounts`, `googleDocs`, `googleSheets`, `googleSearch`, `googlePeople`,
 `notion`, `slack`, `linkedin`, `youtube`, `imageSearch`, `imagegen`,
 `applePasswords`, `captcha`, `aside`. Read the matching skill in
-references/builtin-skills.md before using one.
+references/builtin-skills.md before using one. `applePasswords` does not enumerate
+through `Object.getOwnPropertyNames(Object.getPrototypeOf(...))` on 1.26.902 and
+can look absent; `typeof applePasswords` returns `object`. The `aside` global
+exposes `pdf`, `settings`, `projects`, `sessions`, `routines`, `channels`.
 
 They hold their methods on the prototype, so `Object.keys(twitter)` returns `{}` and
 the global looks empty. Use `Object.getOwnPropertyNames(Object.getPrototypeOf(x))` to

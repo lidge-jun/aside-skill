@@ -38,7 +38,7 @@ Model options, all optional — defaults come from the user's Aside settings:
 -p, --provider <name>
 -s, --speed default|fast
 --effort off|minimal|low|medium|high|xhigh|max|ultrabrowse
---session <id>            # continue a previous session
+--session <id>            # removed in 1.26.902; use: aside session resume <id>
 --account <id>            # e.g. 0 or u0
 ```
 

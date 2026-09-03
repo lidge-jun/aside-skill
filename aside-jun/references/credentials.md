@@ -70,7 +70,9 @@ option along the lines of *Unlock the vault with your biometrics*. Keep it
 disabled. With it off, the 6-digit PIN you set in step 1 is all the vault needs and
 agent-driven sign-in works normally. Turn it on and every unlock demands a live
 fingerprint, which an agent cannot supply, so a once-per-setup ceremony becomes a
-prompt that blocks every future run.
+prompt that blocks every future run. Aside 1.26.822 notes that Touch ID is skipped
+after a passkey dialog; whether that removes the first-run handshake described here
+is unverified on 1.26.902, so keep the setting off until a probe shows otherwise.
 
 The stored form is `biometricUnlockEnabled` in
 `~/.aside/u/0/passwords/settings.json`. Confirm it reads `false`:
@@ -249,9 +251,11 @@ run in 27 seconds with exit 0:
 > "The vault unlock step failed because a 6-digit PIN prompt appeared on macOS
 > that I cannot complete myself. I reported exactly what appeared and stopped."
 
-Without the no-questions clause the agent would have called
-`ask_user_question` and the run would have sat silent until the shell timeout.
-The clause converted an unrecoverable hang into a clean, informative failure.
+On the build this ran on, without the no-questions clause the agent would have
+called `ask_user_question` and the run would have sat silent until the shell
+timeout. On 1.26.902 the tool is absent from CLI sessions, so the clause now
+prevents a question typed into chat that ends the run unanswered; either way it
+converts a dead end into a clean, informative failure.
 
 ### It routed around a passkey by itself
 
@@ -265,7 +269,8 @@ Two lessons. A passkey prompt is often a fork rather than a wall, because most
 sites keep a password fallback; instruct the agent to look for one before treating
 passkeys as fatal. And the "pick the most reasonable option and continue" half of
 the clause is doing real work here: the same sentence that prevents questions also
-authorizes the detour.
+authorizes the detour. Since 1.26.824 the agent clears the clipboard after copying a
+credential, so a run that copied a password leaves nothing behind.
 
 ### The bash rule held
 
