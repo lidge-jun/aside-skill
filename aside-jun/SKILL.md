@@ -348,12 +348,12 @@ root to `~/.aside/u/<n>/` and silently invalidates the clauses, turning the safe
 path into an outside path that `guard` denies. If another account is genuinely
 needed, substitute its root everywhere in the clauses first.
 
-Remote Control routes a run to another machine: `aside host list|use|status`, `--host <id>`
-on `exec` and `repl`, and `aside login` once, after which the local GUI app need not be
-running. `aside host list` answers locally here - `{"defaultHost":"local","hosts":[]}` - because no
-host is enrolled; the daemon reads that from `<account-root>/remote-control.json`, absent on
-this machine. Enrolling registers this desktop with Aside's API, so this skill has not
-tried it; whether a paid plan gates it is unknown.
+Remote Control routes a run to another machine. Aside's own skill documents the surface:
+`aside host list|use|status`, `--host <id>` on `exec` and `repl`, and `aside login` once,
+after which it says the local app need not be running. What was measured here is narrower:
+`aside host list` answers locally, `{"defaultHost":"local","hosts":[]}`, because no host is
+enrolled - the daemon reads that from `<account-root>/remote-control.json`, absent on this
+machine. Enrolling registers this desktop with Aside's API, so nothing beyond that is tested.
 
 ## repl
 

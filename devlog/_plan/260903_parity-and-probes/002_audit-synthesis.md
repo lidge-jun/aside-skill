@@ -24,3 +24,8 @@ NIT 처리: #7 줄 산술은 맞으나 030 의 diff 를 문자 그대로 적용�
 | 3 | check-wp4.sh 가 020/030 검사를 다 담지 못함 (`<=499`, credentials 버전 인용 누락, builtin 재생성 미실행, 설정 무변경 미확인) | 수용. `==499`, 데몬 버전 인용 카운트, 재생성 후 동일성 diff, `remote-control.json` 부재 + `biometricUnlockEnabled=false` 확인 추가 |
 
 확인 사항: 줄 산술 020 (+1-1), 030 (+2-2) 로 499 유지, 403 인과 제거, session/memory/앵커/v2-03 인용 수정은 모두 통과.
+
+## wp2 / wp3 구현 리뷰
+
+- wp2 (Lagrange, near-pass → pass): scheduling.md 뒤쪽에 "writing memories worth recalling" 이 남아 새 memory fence 를 약화시킨다는 지적. 수용해 "giving Aside facts worth recalling" 으로 교체하고, wp2 체크에 그 문구 회귀 검사를 넣었다.
+- wp3 (Lorentz, fail → 재작업): Remote Control 문단이 `--host` 동작·1회 로그인·GUI 독립을 **우리가 검증한 것처럼** 적었다는 지적. 프로브가 증명한 것은 `host list` 의 로컬 응답과 미등록 상태뿐이다. 수용해 공식 스킬의 서술("Aside's own skill documents the surface … it says")과 측정된 사실("What was measured here is narrower")을 문장 단위로 분리했다. 99자 줄도 함께 정리.
