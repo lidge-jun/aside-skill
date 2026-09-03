@@ -85,6 +85,6 @@ in `devlog/_plan/260903_parity-and-probes/001_probe-remote-and-touchid.md`.
 - `rg -c '1.26.903.1631' aside-jun/references/credentials.md` == 1.
 - `rg -c 'is unverified on 1.26.902' aside-jun/references/credentials.md` == 0.
 - `rg -c 'every unlock demands a live fingerprint' aside-jun/references/credentials.md` == 0.
-- `rg -c 'the local GUI app need not be' aside-jun/SKILL.md` == 1 (L13 의 v2-60 수정 문구; Remote Control 문단은 이 주장을 공식 스킬의 말로 귀속시키므로 자체 문구를 쓰지 않는다).
+- `rg -c 'for remote-host commands it need not be' aside-jun/SKILL.md` == 1 (L13-14 의 v2-60 수정 문구; Remote Control 문단은 같은 주장을 공식 스킬의 말로 귀속시키므로 자체 문구를 쓰지 않는다).
 - `rg -c "Aside's own skill documents the surface" aside-jun/SKILL.md` == 1 (측정된 것과 공식 서술을 분리했다는 표시).
 - 설정 무변경 증거: `biometricUnlockEnabled` 가 여전히 false, `remote-control.json` 여전히 부재.

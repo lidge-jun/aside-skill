@@ -8,7 +8,7 @@ rg -q '403' aside-jun/SKILL.md && { echo "403 claim survives"; fail=1; }
 [ "$(rg -c 'remote-control.json' aside-jun/SKILL.md)" = "1" ] || { echo "remote-control.json"; fail=1; }
 [ "$(rg -c "Aside's own skill documents the surface" aside-jun/SKILL.md)" = "1" ] || { echo "attribution split"; fail=1; }
 [ "$(rg -c 'What was measured here is narrower' aside-jun/SKILL.md)" = "1" ] || { echo "measurement split"; fail=1; }
-[ "$(rg -c 'the local GUI app need not be' aside-jun/SKILL.md)" = "1" ] || { echo "v2-60 wording"; fail=1; }
+[ "$(rg -c 'for remote-host commands it need not be' aside-jun/SKILL.md)" = "1" ] || { echo "v2-60 wording"; fail=1; }
 [ "$(rg -c 'checkPasswordVerificationRequired' aside-jun/references/credentials.md)" = "1" ] || { echo "touchid predicate"; fail=1; }
 [ "$(rg -c '1.26.903.1631' aside-jun/references/credentials.md)" = "1" ] || { echo "daemon version cite"; fail=1; }
 rg -q 'is unverified on 1.26.902' aside-jun/references/credentials.md && { echo "stale unverified"; fail=1; }
