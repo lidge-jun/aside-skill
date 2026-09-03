@@ -39,3 +39,5 @@ NIT README L121 수용.
 | 2 | 편집 4 에서 probe-K 인용 누락 | 수용. 인용 복원 |
 
 NIT: "hangs" → "parks" (L144), 긴 줄 정리, 표 셀 축약 + 오류 전문은 표 아래 문장으로.
+
+wp2 결과: 28b0ab5, 361b309 (SKILL.md 485줄), 04c7857 (check-wp2.sh). 첫 D 시도는 receipt 이후 check 스크립트를 커밋해 CHECK-BINDING-01 로 거부됨 → 같은 work-phase 를 P 부터 재진입해 receipt 를 다시 뜸.
