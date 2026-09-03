@@ -10,88 +10,91 @@ against the user's real, logged-in profile, which makes it the right tool when a
 task genuinely needs an existing session: admin consoles, dashboards behind SSO,
 DMs, anything where a plain HTTP fetch gets a login wall.
 
-## The one rule that matters
+## The rule that matters
 
-A non-interactive `aside exec` **cannot answer a prompt**. When the Aside agent
-tries to touch a path outside its allowed roots, or asks the user a question, the
-daemon suspends the run and waits for a human. The CLI has no way to reply, no
-timeout of its own, and emits no error. The tool-call line prints and then there is
-silence until something external kills it.
+An `aside exec` run is non-interactive: an approval prompt, a question, or a Touch
+ID gesture has no one to answer it. What that costs changed in CLI `1.26.902`.
 
-Three ways to cause it, all observed:
+Through `1.26.831` the daemon suspended the run and waited. The tool-call line
+printed, then silence until an external timeout killed the process. On
+`1.26.902.1732` (daemon `1.26.902.1713`) the same calls fail fast, measured
+rather than assumed:
 
-| Cause | What happens |
-|---|---|
-| Writing outside `~/.aside/u/0/` | Hangs. The same write inside finishes in seconds. |
-| Reading outside the allowed roots | Hangs the same way. Reads are not safer than writes. |
-| Asking the user anything | Hangs. The question renders, then nothing. |
+| Cause | through 1.26.831 | 1.26.902, default `guard` |
+|---|---|---|
+| `write_file` outside `~/.aside/u/0/` | hung indefinitely | `Permission denied: write '<path>' is blocked by policy` in ~5s; run continues |
+| `read_file` outside the allowed roots | hung the same way | `Permission denied: read '<path>' is blocked by policy` in ~5s; run continues |
+| `ask_user_question` | rendered, then hung | tool absent from the CLI catalog; the agent reports "no such tool" and exits 0 |
 
-That applies to the file tools, `read_file`, `write_file`, and `edit_file`. They go
-through a permission check that can suspend.
+Evidence: `devlog/_plan/260902_aside-update-audit/evidence/probe-{A,W,C}-*.log`.
 
-Still true on CLI `1.26.810.1915` with daemon `1.26.829.1514`, re-verified rather
-than assumed. The guard config is unchanged:
+The failure changed shape, not severity. A deny is an error the agent reads and
+routes around: in one probe it "did not try other tools", in another it wrote the
+inside file and skipped the outside one, and both runs exited 0. Nothing in the
+exit status says a step was skipped. The risk is now **silently incomplete
+work**, and the prompt clauses below exist so the agent never picks a path that
+gets denied.
+
+The guard config itself is unchanged:
 
 ```json
 {"readableRoots":[],"writableRoots":[],"outsideRead":"ask","outsideWrite":"ask"}
 ```
 
-`ask` is the mechanism. An exec run told to `read_file` a workspace path printed the
-tool-call line and then produced nothing further; the process was still parked when
-killed by hand. No flag turns `ask` into `deny`, so the prompt clauses remain the
-only prevention.
+`ask` is what the Aside window is configured with; whether it still suspends there
+was not probed. A CLI session downgrades it to deny.
 
-`bash` does not. It runs under a separate `sandbox-exec` Seatbelt profile that
-denies rather than asks, so a blocked path returns
-`Operation not permitted` on stderr immediately and the run continues. That makes
-`bash` the safe tool for touching an uncertain path, but it is not a permission
-bypass: the Seatbelt profile has its own boundary. In one probe `head` on a
-workspace file was denied outright while `/etc/hosts` was read and `/tmp` was
-written in the same command.
+`bash` never went through that check. It runs under a `sandbox-exec` Seatbelt
+profile that prints `Operation not permitted` when it blocks. With `sandbox.enabled`
+false on this install, `bash` read a workspace file and `/etc/hosts` in one probe,
+so treat its reach as configuration-dependent rather than as a rule.
 
-So the rule for exec prompts is blunt: **never let the agent use `read_file`,
-`write_file`, or `edit_file` on a path outside `~/.aside/u/0/`.** Tell it to use
-`bash` instead. A denial you can see beats a silent deadlock.
+### Open the session instead of fencing the prompt
 
-### Granting a path on purpose
-
-When a task genuinely cannot avoid an outside path, widen the roots deliberately:
-save the current config, add the path additively to the root lists the clause will
-authorize, run, then restore the saved values. Granting reads while the clause
-allows writes still hangs, and restoring to `[]` silently deletes roots the user
-already had. The full four-step sequence, the clause variants, and the live
-round-trip evidence are in
-[references/permissions.md](references/permissions.md).
-
-Usually skip it. Aside writes under `~/.aside/u/0/` and Codex copies the result out.
-
-### Nothing stops a hang from the outside
-
-There is no `--yes`, no auto-deny, no timeout option. Prevention lives in two places:
-the prompt you write, and a deadline you impose from outside.
-
-**Always run exec under a host timeout.**
+`1.26.902` added `--permission ask|guard|full-access`. **Use `full-access` by default
+for exec runs:**
 
 ```bash
-timeout 300 aside exec "<prompt>"
+timeout 300 aside exec --permission full-access "<prompt>"
 ```
 
-Without it, a hung run holds the shell indefinitely.
+With it the file tools reach paths that `guard` denies (probe B: `read_file` on
+the same workspace file that probe A had blocked returned its contents in 4.2s),
+so the skipped-step failure goes away for the paths a task names. It opens the
+session to whatever the daemon process can reach, so a read-only task has to say
+in the prompt what it must not touch, and the clause that keeps Aside's own output
+under `~/.aside/u/0/` stays.
 
-A fired timeout kills the CLI, not the work already done. Everything the agent
-completed before it suspended still happened: files written inside the allowed
-roots, downloads, form submissions, messages sent. **Inspect the real state before
-retrying**, or a rerun duplicates a side effect. The only thing that certainly did
-not happen is the suspended call itself.
+`guard`, the default when the flag is omitted, fits a task that must not be able
+to touch the workspace at all and can afford a skipped step. `ask` is accepted by
+CLI 1.26.902 but normalizes to `guard` (the help text says so, and two probes with
+it were denied the same way, S8-Q4); it does not suspend from a CLI. The older
+recipe that widens the roots in settings for one directory still works and remains
+the narrow alternative in [references/permissions.md](references/permissions.md).
 
-The Aside session survives as `status: suspended`, with `suspension.kind` of
-`approval` or `ask-user-question`. It waits for a human who never arrives from a
-CLI, so these accumulate rather than clearing themselves. Do not resume one with
-`--session` expecting it to continue.
+### Timeouts still matter
 
-They are also invisible to the ordinary session API: CLI runs are created
-`ephemeral`, and `aside.sessions.list()` returns only visible sessions, so it
-reports zero while several are parked. Read the database directly instead:
+There is no timeout option. A run can still park on a passkey gesture or a
+credential-manager handshake, and it can simply take long.
+Always run under a host deadline:
+
+```bash
+timeout 300 aside exec --permission full-access "<prompt>"
+```
+
+A fired timeout kills the CLI, not the work already done: files written,
+downloads, form submissions, messages sent all stand. **Inspect the real state
+before retrying**, or a rerun duplicates a side effect.
+
+Before letting the timeout fire, reach the run. The id is on the first line the
+CLI prints (`created new session: <id>`). `aside session steer <id> "report what is blocking you and stop"`
+injects an instruction into a running session and `aside session stop <id>`
+ends it cleanly.
+
+A run that did suspend survives as `status: suspended` with `suspension.kind` of
+`approval` or `ask-user-question`. `aside session list` does not show those: on
+2026-09-02 it listed the idle, interrupted, and aborted CLI sessions and none of
+the suspended rows present in `state.db` (S7). Read the database directly:
 
 ```bash
 python3 -c "import sqlite3,json;c=sqlite3.connect('file:$HOME/.aside/u/0/state.db?mode=ro',uri=True);\
@@ -99,22 +102,37 @@ print([(r[0], json.loads(r[1])['kind']) for r in c.execute(\
 \"select id,suspension from sessions where status='suspended'\")])"
 ```
 
-Treat that count as a hygiene signal: a growing list means prompts are still
-tripping the approval path. Whether a hidden ephemeral session can be answered in
-the Aside UI is unconfirmed, so do not rely on clearing them that way.
+A growing count means prompts are still tripping the approval path. On 1.26.902
+the CLI cannot create a new one: `--permission ask` is documented as the same
+mode as `guard` and denies instead of parking (S8-Q4). The rows that remain are
+older builds' leftovers; `aside session resume` and `steer` refuse them with
+`Session is pending purge`, and `aside.sessions` in repl has no approve or answer
+method, so clear them yourself when they matter.
 
-Retrying the same prompt hangs the same way, so fix the prompt instead.
+Set `aside settings save-sessions true` once. It flips `cli.ephemeral` in
+`~/.aside/u/0/settings.json` to `false`, so every later CLI session is created
+persistent: it appears in `aside session list` as `persistent`, in
+`aside.sessions.list()`, and in the Aside window's Chats list, and it is exempt from
+the 15-minute purge (S8-Q1..Q5). Details in
+[references/scheduling.md](references/scheduling.md).
 
-Read [references/permissions.md](references/permissions.md) when you need the
-underlying mechanism, want to confirm whether a path is inside the allowed roots,
-or are diagnosing a hang these rules do not explain.
+Read [references/permissions.md](references/permissions.md) for the mechanism,
+the exact roots, and the settings-level grant.
 
 ## Choosing a surface
 
 ```
-exec  -> delegate a task to Aside's agent
-repl  -> drive the browser yourself
+repl  -> your own tool: you drive the browser, one call, deterministic
+exec  -> a subagent: hand Aside's agent a task and read its report
 ```
+
+This is a deliberate departure from Aside's own `aside-browser` skill, which since
+`1.26.902` says to hand work to Aside by default and reach for JavaScript only when
+the user names Playwright. The split here stays because a repl call is one
+session with a beginning and an end, it throws immediately on a bad path instead
+of skipping, and every snapshot and screenshot lands in Codex's hands as evidence.
+Delegation buys judgment and costs verifiability, so it is used where judgment is
+the point.
 
 Reach for **exec** when the work needs judgment, a login, or one of Aside's builtin
 skills: signing in, navigating an unfamiliar site, reading Gmail or Notion,
@@ -131,14 +149,14 @@ signs in once in the Aside window and `exec` inherits the live session.
 
 Reach for **repl** when you already know what to do. It is a Playwright-style
 surface and you control every step. It is also the safer choice for file work,
-because the repl filesystem throws immediately on a bad path instead of hanging.
+because the repl filesystem throws immediately on a bad path instead of skipping it.
 
 repl shares the signed-in profile, so it is not a private window. A fresh CLI repl
 starts with no attached tabs, which reads like an empty browser, but `openTab`
 inherits the account's cookies: opening `x.com/home` landed on the signed-in
-timeline rather than a login wall, verified against CLI `1.26.810.1915` with daemon
-`1.26.829.1514`. If a repl tab does come up signed out on an older build, update
-Aside before working around it.
+timeline rather than a login wall, verified against CLI `1.26.902.1732` with daemon
+`1.26.902.1713` (signed-in discord.com and aside.com tabs on 2026-09-02). If a repl
+tab does come up signed out on an older build, update Aside before working around it.
 
 If a task is mostly mechanical with one authenticated step, do the authenticated
 part with exec and the rest with repl.
@@ -203,7 +221,7 @@ reasonable option and continue, or report exactly what blocked you and stop.
 Assembled:
 
 ```bash
-timeout 300 aside exec "Go to <url> and <task>. Report <fields>.
+timeout 300 aside exec --permission full-access "Go to <url> and <task>. Report <fields>.
 Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
 local path use the bash tool instead - never the file tools.
 Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
@@ -215,18 +233,20 @@ The first clause is the important one, and it is a tool rule rather than a path
 rule: the file tools stay inside `~/.aside/u/0/`, and everything else goes through
 `bash`. Reading is no safer than writing here, so the clause covers both. Aside's
 own system prompt tells the agent to "request access once" for outside paths,
-which is precisely the move that deadlocks a CLI run, so the override has to be
-explicit.
+which under `guard` is denied and skipped, and under `full-access` is unnecessary,
+so the override has to be explicit.
 
 The third clause overrides Aside's own instruction. Its builtin guidance ends the
 login section with "**ASK USER AS THE LAST RESORT**", which is sound advice in the
-app window and a deadlock in a non-interactive run: there is no last resort, only a
-parked process. Replace it with a ladder that ends in a clean stop:
+app window; in a non-interactive run there is no last resort: the tool is absent
+from the CLI catalog and a question typed into chat ends the run. Replace it with a
+ladder that ends in a clean stop:
 
-> Never ask a question from a non-interactive `aside exec` run. The CLI cannot
-> answer `ask_user_question`, an approval prompt, Touch ID, a passkey gesture, or a
-> macOS Apple Passwords code. Instead, work the routes that are already available:
-> the inherited signed-in session, a clearly matching password-manager item, a
+> Never ask a question from a non-interactive `aside exec` run. The CLI has no
+> `ask_user_question` tool and cannot answer an approval prompt, Touch ID, a passkey
+> gesture, or a macOS Apple Passwords code. Instead, work the routes that are
+> already available: the inherited signed-in session, a clearly matching
+> password-manager item, a
 > configured external provider, a password or OAuth fallback behind "Try another
 > way", an already-available TOTP, or the `captcha` tools. If completion still needs
 > a human, do not ask and do not wait. Report the exact blocking screen, what a
@@ -241,50 +261,72 @@ repl `fs` cannot: it sees only the session and project roots. A file the browser
 downloaded is still readable through `download.path()`, but within the same
 invocation only.
 
-Omit `-m`. Passing a model flips `strictModelSelection` in the session config, so
-leaving it off is a behavioral choice rather than laziness. Aside's own settings
-pick the model.
+Omit `-m` by default: passing a model flips `strictModelSelection` and Aside's own
+settings pick the model. When a specific model is required, use the slash form
+with the provider in front, `-m opencodex/xai/grok-4.6`. The split form
+`-m xai/grok-4.6 -p opencodex` fails.
 
 Runs take minutes. Start one, capture the session, then poll:
 
 ```
-exec_command  cmd="timeout 300 aside exec '<prompt>'"  yield_time_ms=30000
+exec_command  cmd="timeout 300 aside exec --permission full-access '<prompt>'"  yield_time_ms=30000
 write_stdin   session_id=<id>  chars=""  yield_time_ms=120000
 ```
 
 Empty `chars` polls without typing. If output stops right after a tool-call line
-and stays stopped, that is a hang rather than slow work.
+and stays stopped, that is a parked run rather than slow work; `aside session steer`
+it before the timeout fires.
 
 The user cannot see the Aside CLI's output, so a long run needs narration: tell them
 roughly every 60 seconds what the agent is doing and what it has established. Aside's
 own guidance asks for this and it is the difference between a run that looks alive and
 one that looks hung.
 
-Useful options: `--session <id>` continues a healthy run, and
-`--effort ultrabrowse` enables proactive mode for flows that must recover from
-surprises on their own.
+Useful options: `--permission full-access` (above), `--effort ultrabrowse` for flows that
+must recover from surprises on their own, and `--log-dump <path>` to record every
+agent event as JSONL (re-verified on 1.26.902, `evidence/probe-L-log-dump-summary.log`:
+`agent_start`, `turn_start`, `message_*`, `toolcall_*` and `tool_execution_*`
+events).
 
-`--session` only works for about 15 minutes. CLI sessions are created ephemeral
-and the daemon purges them after that, so a later resume fails with
-`Session is pending purge`. For anything scheduled or long-running, carry state in
-files under `~/.aside/u/0/` instead of threading a session, and let Aside's own
-memory store hold what is generally true. See
+The `--session` flag is gone as of `1.26.902`; passing it prints the help text. A
+healthy run continues with `aside session resume <id> "<prompt>"`, a running one is
+redirected with `aside session steer <id> "<text>"` or handed a follow-up with
+`aside session queue <id> "<text>"`. Re-pass `-m` on resume: without it the daemon
+reads the model id stored in the session, which for a routed model comes back
+provider-less and fails with `<model> is not available`.
+
+Resume works for about 15 minutes. CLI sessions are created ephemeral and the
+daemon purges them after that (`EPHEMERAL_SESSION_RETENTION_MS = 9e5`, unchanged in
+1.26.902), so a later resume fails with `Session is pending purge`. That applies to
+sessions created while `save-sessions` is off. With it on (above) new CLI sessions
+are persistent and the purge query's `ephemeral = true` predicate skips them
+(S8-Q5); a resume past 15 minutes on such a session has not been timed yet, so treat
+it as expected rather than proven. For anything scheduled or
+long-running, carry state in files under `~/.aside/u/0/` and let Aside's memory
+store hold what is generally true; `aside memory search <query>`, `list`, `show`, and
+`path` read that store from the CLI. See
 [references/scheduling.md](references/scheduling.md) before putting `exec` in cron
 or a LaunchAgent.
 
 Scheduling needs no machinery beyond that. Point cron or a LaunchAgent straight at
 `aside exec` with a full prompt, wrap it in `timeout` and `flock`, and let each
-tick be a complete run. Session ids are not worth saving to disk, because they stop
-resolving after the purge window. Aside's memory store has room to spare - a store
-in daily use sat at 7.4MB with 217 index entries - so let it accumulate what is
-generally true and keep per-job bookkeeping in your own files under the account
-root.
+tick be a complete run. Session ids are not worth saving to disk while
+`save-sessions` is off, because they stop resolving after the purge window; with it
+on they persist, but a fresh run per tick is still the simpler design. Aside's
+memory store has room to spare - a store in daily use sat at 7.4MB with 217 index
+entries - so let it accumulate what is generally true and keep per-job bookkeeping
+in your own files under the account root.
 
 Account selection is deliberately missing from that list. Every path rule here is
 written for account `u0`, whose root is `~/.aside/u/0/`. Another account moves the
 root to `~/.aside/u/<n>/` and silently invalidates the clauses, turning the safe
-path into an outside path that suspends. If another account is genuinely needed,
-substitute its root everywhere in the clauses first.
+path into an outside path that `guard` denies. If another account is genuinely
+needed, substitute its root everywhere in the clauses first.
+
+Remote Control exists on the same surface: `--host <id>`, `aside host list|use|status`,
+and `aside login --email` route a run to another machine on Pro and Max plans. On this
+account `aside host list` returned 403, so they are recorded here as present and
+unverified.
 
 ## repl
 
@@ -355,11 +397,16 @@ download handling, and the service globals:
 Aside ships skills covering Gmail, Google Docs and Sheets, Notion, Slack, X,
 KakaoTalk, iMessage, YouTube, Chrome APIs, seven password managers, CAPTCHA
 solving, and document formats, plus a set of site-specific skills for services like
-Jira, Linear, GitHub, and Trello. **Only exec can load them.** You cannot invoke one
-directly; name it in the prompt and the agent picks it up.
+Jira, Linear, GitHub, and Trello.
+
+**exec loads them on its own**: name the skill in the prompt and the agent picks it
+up. Codex can also read one before delegating: `aside skills list` prints a
+CLI-listed subset (11 names on 1.26.902, not identical to the repl-backed set) and
+`aside skills show <name>` prints any skill's body, which is how to learn what a
+skill will do or to drive its repl global yourself.
 
 ```bash
-timeout 300 aside exec "Use the google-sheets skill to read the totals from <url>.
+timeout 300 aside exec --permission full-access "Use the google-sheets skill to read the totals from <url>.
 Report each row label and its total.
 Use read_file, write_file and edit_file only under ~/.aside/u/0/. For any other
 local path use the bash tool instead - never the file tools.
@@ -370,6 +417,10 @@ reasonable option and continue, or report exactly what blocked you and stop."
 
 Naming the skill usually beats describing the workflow, because several of them
 reach an API and never open a tab at all.
+
+`aside skills install` copies Aside's own `aside-browser` skill into a Codex, Claude Code,
+Cursor, or OpenCode skills directory. Do not run it here: this skill replaces it,
+and two skills in one trigger space route unpredictably.
 
 The catalog, including which skills are backed by a repl global you could drive
 yourself: [references/builtin-skills.md](references/builtin-skills.md). Regenerate
@@ -388,19 +439,21 @@ than trusting the first report.
 
 ## When something goes wrong
 
-**Silence after a tool call.** That is a hang. Let the timeout end it, then check
-the prompt for a path outside `~/.aside/u/0/` or a request that invites a question.
-Re-running with the undocumented `--log-dump <path>` flag records every agent event
-as JSONL, which shows exactly which call suspended.
+**Silence after a tool call.** The run is parked, most often on a credential or
+passkey handshake. Try `aside session steer <id>` first, let the timeout end it
+otherwise, then check the prompt for a request that invites a question. Re-running
+with `--log-dump <path>` records every agent event as JSONL and shows which call
+parked.
 
 **A model error such as `401 Model not supported`.** The account's configured
-default model is unavailable. Pass a working model once with `-m`, and tell the
-user their Aside default needs updating rather than hardcoding a model into future
-calls. Check what is configured with `aside repl "console.log(JSON.stringify(aside.settings.get('defaultModel')))"`.
+default model is unavailable. Pass a working model once with `-m provider/model`,
+and tell the user their Aside default needs updating rather than hardcoding a model
+into future calls. Check what is configured with
+`aside repl "console.log(JSON.stringify(aside.settings.get('defaultModel')))"`.
 
 **`aside mcp` produces nothing.** Expected. It emits no stdout for a plain
 initialize over stdio; it is meant to be driven by an MCP client, not probed by
-hand.
+hand. Since `1.26.902` it can create and run agent tasks for a connected client.
 
 **Wrong account.** `aside account list` shows which is signed in. If you switch
 with `aside account use <id>`, re-confirm with `aside account list` and rewrite
@@ -414,10 +467,10 @@ access of its own, so when a result needs to reach the workspace, let Aside writ
 it inside its root and copy it out yourself. Copying out is the default and it is
 almost always enough.
 
-Widening the roots is the exception, not a second normal path. Reach for the
-grant-run-restore sequence above only when a task genuinely cannot be done any other
-way, keep the grant to one specific directory, restore it in the same turn, and tell
-the user what you granted. Do not widen the roots merely to save yourself a copy.
+`--permission full-access` is the normal way to let a run reach a workspace path;
+tell the user a run was opened when the task touches anything outside Aside's root.
+The settings-level root grant is the narrow alternative for one directory; keep it
+to that directory, restore it in the same turn, and say what was granted.
 
 `~/.aside/u/0/models.json` and `accounts.json` can hold plaintext credentials.
 Never print or commit them.
