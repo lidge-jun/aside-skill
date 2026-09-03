@@ -163,8 +163,9 @@ Anything else throws immediately:
 Path escapes Project and session roots: /etc/passwd
 ```
 
-**This throw is a feature.** Unlike `exec`, the repl fs fails fast instead of
-hanging. When you only need to read or write a file, repl is the safer surface.
+**This throw is a feature.** Unlike `exec` under `guard`, which denies and moves
+on, the repl fs raises an error you cannot miss. When you only need to read or write
+a file, repl is the safer surface.
 
 ## Other globals
 

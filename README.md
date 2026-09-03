@@ -1,7 +1,7 @@
 # aside-skill
 
 A Codex skill for driving the [Aside](https://asidehq.com) browser CLI without
-deadlocking it.
+losing work to a prompt nobody can answer.
 
 Aside is a Chromium fork with a built-in browser agent, and its CLI runs that agent
 against your real logged-in profile. That makes it useful for anything behind a

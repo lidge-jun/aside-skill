@@ -41,3 +41,7 @@ NIT README L121 수용.
 NIT: "hangs" → "parks" (L144), 긴 줄 정리, 표 셀 축약 + 오류 전문은 표 아래 문장으로.
 
 wp2 결과: 28b0ab5, 361b309 (SKILL.md 485줄), 04c7857 (check-wp2.sh). 첫 D 시도는 receipt 이후 check 스크립트를 커밋해 CHECK-BINDING-01 로 거부됨 → 같은 work-phase 를 P 부터 재진입해 receipt 를 다시 뜸.
+
+## wp3 B 리뷰 (reviewer Raman / gpt-5.6-sol high, FAIL 3 blockers)
+
+C-check·스크립트·클로즈 사본 SHA 는 통과. 블로커는 전부 "030 이 겨냥하지 않은 줄에 남은 현재형 구버전 서술": permissions.md L97/110/137/199/260/267, credentials.md L28, README L24, repl-api.md L166. 전부 수용해 "through 1.26.831 / on 1.26.902" 로 범위를 달거나 deny 계약으로 고쳐 씀. 추가로 스스로 잡은 README L3-4, credentials L239, permissions L171/L204/L289. NIT(030 literal 과의 미세 차이 2곳)는 의미 동일로 수용 안 함.

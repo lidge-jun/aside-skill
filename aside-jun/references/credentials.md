@@ -25,8 +25,9 @@ Call applePasswords.requestAuth(), then applePasswords.verifyAuth(pin).
 
 macOS then shows a **6-digit code that only a human can read off the screen**.
 There is no API that returns it. An agent in a non-interactive `exec` run has no
-way to obtain it, and if the prompt does not forbid questions the agent will call
-`ask_user_question` and deadlock the run.
+way to obtain it, and if the prompt does not forbid questions the agent asks anyway:
+through 1.26.831 that call deadlocked the run, on 1.26.902 the tool is gone and the
+question ends the run unanswered.
 
 This is not hypothetical. A real run hit exactly this and stopped cleanly only
 because the standing clauses forbade questions:
@@ -235,7 +236,7 @@ There is no TOTP method here; codes come from `applePasswords.getOtps(url)`.
 
 Sign in once, by hand, in the Aside window. Then delegate. `exec` inheriting a live
 session never has to touch a credential, which removes the whole class of prompts
-that hang a run.
+that park a run.
 
 ## Two runs worth learning from
 

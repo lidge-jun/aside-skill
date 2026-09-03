@@ -93,9 +93,9 @@ On 1.26.902 each of these returns an error instead; see above.
 
 ## What the guard mode actually allows
 
-CLI-triggered sessions get `permission_mode: "guard"`. GUI sessions get
-`"full-access"`, which is why something that works in the Aside window can hang
-from the terminal.
+CLI-triggered sessions get `permission_mode: "guard"` unless `--permission` says
+otherwise. GUI sessions get `"full-access"`, which is why something that works in
+the Aside window was denied (or, through 1.26.831, hung) from the terminal.
 
 ```
 writableRoots  ~/.aside/u/0, ~/.aside/u/0/memory, ~/.aside/u/0/skills,
@@ -107,7 +107,8 @@ outsideRead    ask
 outsideWrite   ask
 ```
 
-Both `ask` values are the trap. Anything outside these roots suspends.
+Both `ask` values are the trap. Anything outside these roots suspended through
+1.26.831 and is denied on 1.26.902.
 
 ## Flags, then and now
 
@@ -134,9 +135,10 @@ Guard sessions receive this injected system prompt text:
 > paths outside the current permission policy, request access once instead of
 > retrying failing commands."
 
-"Request access once" is precisely the suspend that a CLI cannot answer. The
-agent is being told to do the thing that hangs it, so the exec prompt has to
-override that instruction explicitly.
+"Request access once" is precisely the suspend that a CLI cannot answer, and on
+1.26.902 it is the call that gets denied and skipped. The agent is being told to do
+the thing that parks or drops its work, so the exec prompt has to override that
+instruction explicitly.
 
 ## Two hidden CLI flags
 
@@ -166,8 +168,8 @@ specific model is genuinely required.
 
 ## bash is governed by a different mechanism
 
-Not every tool suspends. The daemon's `FILE_TOOL_CALLS` gate maps exactly three
-tools into the permission check:
+Not every tool goes through the permission check. The daemon's `FILE_TOOL_CALLS`
+gate maps exactly three tools into it:
 
 ```js
 FILE_TOOL_CALLS = {
@@ -196,7 +198,8 @@ bash: printf ok > /tmp/_probe.txt && ls -la /tmp/_probe.txt
   -> file really created
 ```
 
-The same workspace path through `read_file` hangs indefinitely.
+The same workspace path through `read_file` hung indefinitely on that build and is
+denied by policy on 1.26.902.
 
 Two consequences worth holding onto. First, `bash` is the right tool when a path
 might be outside the roots, because a visible denial is strictly better than a
@@ -257,14 +260,15 @@ granted both lists, then an `exec` run wrote and read a file under the granted p
 seconds, with no suspension. Restoring put the original empty lists back.
 
 That is the proof the grant has to cover writes: with the path in `readableRoots`
-only, the same `write_file` would have met `outsideWrite: "ask"` and parked. The
+only, the same `write_file` would have met `outsideWrite: "ask"` and parked (denied,
+on 1.26.902). The
 spread in step 2 is what makes it additive; assigning a bare array there is the other
 bug this sequence exists to avoid.
 
 While a grant is live, the first standing clause has to name the granted path too,
 or the prompt forbids the very access you just arranged. The clause and the grant
 must cover the same operations: `outsideWrite` stays `ask`, so a path present only in
-`readableRoots` still suspends on a write.
+`readableRoots` is still refused on a write.
 
 ```text
 Use read_file, write_file and edit_file only under ~/.aside/u/0/ and <abs-path>. For
@@ -283,7 +287,7 @@ the file tools.
 Revert to the plain clause as soon as the grant is restored.
 
 Verified: with a single project directory granted this way, `read_file` on a
-file there returned its contents immediately instead of hanging. Note
+file there returned its contents immediately instead of being refused. Note
 `settings.set` returns `undefined` even on success, so read the value back rather
 than trusting the return.
 
