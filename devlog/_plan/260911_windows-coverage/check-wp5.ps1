@@ -65,6 +65,32 @@ if (Test-Path -LiteralPath $dest) {
   Check 'deploy: aside-jun is installed in the Codex skills directory' $false ('not found at ' + $dest)
 }
 
+# skill routing: aside-browser must be out of every skill root, and its backup must
+# still exist unchanged outside them. Hash is the file's known SHA256.
+$KNOWN = 'DC9166286989DE01F4D6087D4A21DFD91C5E6E0089B39589B555601754ABD3C6'
+$skillRoots = @((Join-Path $env:USERPROFILE '.codex\skills'), (Join-Path $env:USERPROFILE '.agents\skills'))
+$stray = 0
+foreach ($r in $skillRoots) {
+  if (Test-Path -LiteralPath $r) {
+    $stray += @(Get-ChildItem -LiteralPath $r -Recurse -Directory -Filter 'aside-browser' -ErrorAction SilentlyContinue).Count
+  }
+}
+Check 'routing: aside-browser is absent from every skill root' ($stray -eq 0) ('copies found ' + $stray)
+$bkRoot = Join-Path $env:USERPROFILE '.codex\backups\skills'
+$bkFile = $null
+if (Test-Path -LiteralPath $bkRoot) {
+  $bkFile = @(Get-ChildItem -LiteralPath $bkRoot -Recurse -File -Filter 'SKILL.md' -ErrorAction SilentlyContinue |
+               Where-Object { $_.FullName -like '*aside-browser*' }) | Select-Object -First 1
+}
+if ($bkFile) {
+  $s2 = [System.Security.Cryptography.SHA256]::Create()
+  $h = [BitConverter]::ToString($s2.ComputeHash([IO.File]::ReadAllBytes($bkFile.FullName))).Replace('-','')
+  $s2.Dispose()
+  Check 'routing: the aside-browser backup is byte-identical' ($h -eq $KNOWN) ('hash ' + $h)
+} else {
+  Check 'routing: an aside-browser backup exists outside the skill roots' $false ('nothing under ' + $bkRoot)
+}
+
 $sb = [IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'check-wp5.ps1'))
 $sn = 0
 foreach ($b in $sb) { if ($b -gt 127) { $sn++ } }
