@@ -1,6 +1,6 @@
 ---
 name: aside-jun
-description: Drive the Aside browser CLI on macOS for work that needs a real signed-in browser - reading pages behind a login, automating multi-step web flows, and delegating browser tasks to Aside's own agent. Use when a session or cookies are required and an HTTP fetch would fail; not for ordinary public-page fetching or local browser QA.
+description: Drive the Aside browser CLI on macOS or Windows for work that needs a real signed-in browser - reading pages behind a login, automating multi-step web flows, and delegating browser tasks to Aside's own agent. Use when a session or cookies are required and an HTTP fetch would fail; not for ordinary public-page fetching or local browser QA.
 ---
 
 # Aside
@@ -10,10 +10,35 @@ against the user's real, logged-in profile, which makes it the right tool when a
 task genuinely needs an existing session: admin consoles, dashboards behind SSO,
 DMs, anything where a plain HTTP fetch gets a login wall.
 
-Aside is macOS-only: the CLI is a `Mach-O` binary and a local run needs the GUI app
-running; for remote-host commands it need not be (see Remote Control below).
-A stock macOS machine has neither `timeout` nor `flock`, so every command here uses
-the base-system `perl -e 'alarm ...'` and `shlock`; the deadline section says why.
+Aside runs on macOS and Windows under the same CLI contract, measured on both at
+`1.26.906.1630`. A local run needs the GUI app running; a remote-host command does
+not (see Remote Control below). Everything in this file is platform-neutral. The
+host layer - where the CLI lives, how a deadline fires, how a job is locked and
+scheduled - differs by OS and lives in one file per OS.
+
+## Host layer
+
+Read exactly one, for the machine you are on:
+
+| OS | file |
+|---|---|
+| macOS | [references/host-macos.md](references/host-macos.md) |
+| Windows | [references/host-windows.md](references/host-windows.md) |
+
+Each documents **both bash and PowerShell** as first-class ways to drive the CLI.
+Neither is a fallback. Do not translate a snippet into the other shell to match an
+example, and do not assume the shell decides the primitive - the OS does.
+
+Three rules from those files hold everywhere and are not repeated per recipe:
+
+- Resolve the CLI through the host file before the first command. On Windows the
+  `aside` name is not resolvable on a fresh install. `aside version` without dashes
+  opens an agent session; only `--version` prints a version.
+- Every `exec` runs under a host deadline. A fired deadline exits `142` on every OS
+  and shell; any other non-zero code came from the CLI itself.
+- **Exit `0` is not success.** Every failure mode measured - a denied file tool, a
+  repl `ReferenceError`, a repl root escape - still exited `0`. Grep stdout for
+  `is blocked by policy`, and verify any file the run claims to have written.
 
 ## The rule that matters
 
@@ -27,7 +52,7 @@ rather than assumed:
 
 | Cause | through 1.26.831 | 1.26.902, default `guard` |
 |---|---|---|
-| `write_file` outside `~/.aside/u/0/` | hung indefinitely | `blocked by policy` in ~5s; run continues |
+| `write_file` outside the account root | hung indefinitely | `blocked by policy` in ~5s; run continues |
 | `read_file` outside the allowed roots | hung the same way | `blocked by policy` in ~5s; run continues |
 | `ask_user_question` | rendered, then hung | tool absent from the CLI catalog; agent says so, exits 0 |
 
@@ -51,26 +76,22 @@ The guard config itself is unchanged:
 `ask` is what the Aside window is configured with; whether it still suspends there
 was not probed. A CLI session downgrades it to deny.
 
-`bash` never went through that check. It runs under a `sandbox-exec` Seatbelt
-profile that prints `Operation not permitted` when it blocks. With `sandbox.enabled`
-false on this install, `bash` read a workspace file and `/etc/hosts` in one probe,
-so treat its reach as configuration-dependent rather than as a rule.
+`bash` never went through that check. It is governed by the OS sandbox instead, and
+that mechanism is the one thing the two platforms do not share: on macOS it denies
+with a message, on Windows it does not deny at all. Read your host file and
+[references/permissions.md](references/permissions.md) before using it.
 
 ### Open the session instead of fencing the prompt
 
 `1.26.902` added `--permission ask|guard|full-access`. **Use `full-access` by default
-for exec runs:**
-
-```bash
-perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access "<prompt>"
-```
+for exec runs.** The invocation itself, deadline included, is in your host file.
 
 With it the file tools reach paths that `guard` denies (probe B: `read_file` on
 the same workspace file that probe A had blocked returned its contents in 4.2s),
 so the skipped-step failure goes away for the paths a task names. It opens the
 session to whatever the daemon process can reach, so a read-only task has to say
 in the prompt what it must not touch, and the clause that keeps Aside's own output
-under `~/.aside/u/0/` stays.
+under the account root stays.
 
 `guard`, the default when the flag is omitted, fits a task that must not be able
 to touch the workspace at all and can afford a skipped step. `ask` is accepted by
@@ -83,30 +104,11 @@ the narrow alternative in [references/permissions.md](references/permissions.md)
 
 There is no timeout option. A run can still park on a passkey gesture or a
 credential-manager handshake, and it can simply take long.
-Always run under a host deadline:
-
-```bash
-perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access "<prompt>"
-```
-
-That command is deliberately not `timeout 300`. **macOS has no `timeout`**, and the
-obvious spelling does not fail safe: `command not found` exits 127 before `aside`
-is ever invoked, so the run it was meant to bound never started. Confirmed on macOS
-27.0 arm64, where `timeout`, `gtimeout`, and `flock` are all absent without
-Homebrew `coreutils`. `perl` is in the base system and its `alarm` form behaves the
-way the safeguard needs:
-
-| Property | Measured |
-|---|---|
-| Fires at the deadline | `alarm 2` on `sleep 30` returned at 2.009s |
-| Reports the kill distinctly | exit `142`, which is `128 + SIGALRM` |
-| Passes a normal exit through | child `exit 7` surfaced as `7` |
-
-`exec` replaces the shell with `aside` in the same process and the `alarm` timer
-survives that, so the deadline lands on the CLI itself. It was verified against a
-real parked run on an older build (a clause-stripped `read_file` killed at 30.2s), not
-only against `sleep`. `brew install coreutils` provides `gtimeout` if you prefer
-the documented spelling; do not assume it is present.
+Always run under the host deadline from your host file. The spelling matters more
+than it looks: the obvious one is wrong on both platforms - macOS has no `timeout`
+in the base system, and on Windows the bare word resolves to a System32 program that
+*sleeps* instead of wrapping. Both host files carry the working primitive, its
+evidence, and the rejected candidates.
 
 A fired timeout kills the CLI, not the work already done: files written,
 downloads, form submissions, messages sent all stand. **Inspect the real state
@@ -136,7 +138,7 @@ older builds' leftovers; `aside session resume` and `steer` refuse them with
 method, so clear them yourself when they matter.
 
 Set `aside settings save-sessions true` once. It flips `cli.ephemeral` in
-`~/.aside/u/0/settings.json` to `false`, so every later CLI session is created
+the account's `settings.json` to `false`, so every later CLI session is created
 persistent: it appears in `aside session list` as `persistent`, in
 `aside.sessions.list()`, and in the Aside window's Chats list, and it is exempt from
 the 15-minute purge (S8-Q1..Q5). Details in
@@ -235,23 +237,17 @@ through exec, which then uses its repl tool to search the vault and autofill. Se
 Every exec prompt ends with these three clauses, used verbatim:
 
 ```text
-Write and edit files only under ~/.aside/u/0/. Read other local paths only when
+Write and edit files only under <account-root>. Read other local paths only when
 this prompt names them, and never modify them.
-Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
+Downloading to <downloads> is fine; move anything you keep under <account-root>.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop.
 ```
 
-Assembled:
-
-```bash
-perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access "Go to <url> and <task>. Report <fields>.
-Write and edit files only under ~/.aside/u/0/. Read other local paths only when
-this prompt names them, and never modify them.
-Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
-Do not ask me any questions. If something is blocked or ambiguous, pick the most
-reasonable option and continue, or report exactly what blocked you and stop."
-```
+Substitute the two placeholders with **absolute** paths taken from your host file,
+and never send a literal `~`: Aside's path layer does not expand it. On Windows it
+silently creates a directory named `~` and still reports `Successfully wrote`.
+Assemble the task sentence, then these clauses, inside your host file's deadline.
 
 The first clause is the write fence. `--permission full-access` opens the session,
 so the prompt is what keeps Aside's output under its own root and keeps its hands
@@ -261,10 +257,12 @@ Codex copies results out afterwards. Aside's own system prompt tells the agent t
 and under `guard` is denied and skipped, so the override has to be explicit.
 
 Running under `guard` instead? Prefix the clauses with the older fence, `Use
-read_file, write_file and edit_file only under ~/.aside/u/0/. For any other local
+read_file, write_file and edit_file only under <account-root>. For any other local
 path use the bash tool instead - never the file tools.`, so a denied call never
-silently drops a step. `bash` under `guard` reaches whatever the Seatbelt profile
-allows, which varied between probes, so treat it as best-effort there.
+silently drops a step. What `bash` can reach under `guard` is the one thing that
+does not carry across: on macOS it reaches whatever the sandbox profile allows,
+which varied between probes, and on Windows it does not answer at all - the call
+deadlocks the session. If a task needs the shell tool, run it `full-access`.
 
 The third clause overrides Aside's own instruction. Its builtin guidance ends the
 login section with "**ASK USER AS THE LAST RESORT**", which is sound advice in the
@@ -299,7 +297,7 @@ with the provider in front, `-m opencodex/xai/grok-4.6`. The split form
 Runs take minutes. Start one, capture the session, then poll:
 
 ```
-exec_command  cmd="perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access '<prompt>'"  yield_time_ms=30000
+exec_command  cmd="<host-file deadline wrapper> aside exec --permission full-access -- '<prompt>'"  yield_time_ms=30000
 write_stdin   session_id=<id>  chars=""  yield_time_ms=120000
 ```
 
@@ -327,15 +325,14 @@ created ephemeral and purged after `EPHEMERAL_SESSION_RETENTION_MS = 9e5`
 With it on (above) new sessions are persistent and the purge query's
 `ephemeral = true` predicate skips them (S8-Q5); a resume past 15 minutes on such
 a session has not been timed yet. For anything scheduled or long-running, carry
-state in files under `~/.aside/u/0/` and let Aside's memory store hold what is
+state in files under the account root and let Aside's memory store hold what is
 generally true; `aside memory search|list|show|path` read that store from the CLI.
 See [references/scheduling.md](references/scheduling.md) before putting `exec` in
 cron or a LaunchAgent.
 
-Scheduling needs no machinery beyond that. Point cron or a LaunchAgent straight at
-`aside exec` with a full prompt, wrap it in a deadline and a lock -
-`perl -e 'alarm ...'` and `shlock` on macOS, since `timeout` and `flock` are not
-installed - and let each tick be a complete run. Session ids are not worth saving to disk while
+Scheduling needs no machinery beyond that. Point the OS scheduler straight at
+`aside exec` with a full prompt, wrap it in the deadline and lock your host file
+names, and let each tick be a complete run. Session ids are not worth saving to disk while
 `save-sessions` is off, because they stop resolving after the purge window; with it
 on they persist, but a fresh run per tick is still the simpler design. Aside's
 memory store has room to spare - a store in daily use sat at 7.4MB with 217 index
@@ -343,7 +340,7 @@ entries - so let it accumulate what is generally true and keep per-job bookkeepi
 in your own files under the account root.
 
 Account selection is deliberately missing from that list. Every path rule here is
-written for account `u0`, whose root is `~/.aside/u/0/`. Another account moves the
+written for account `u0`, whose absolute root your host file gives. Another account moves the
 root to `~/.aside/u/<n>/` and silently invalidates the clauses, turning the safe
 path into an outside path that `guard` denies. If another account is genuinely
 needed, substitute its root everywhere in the clauses first.
@@ -410,7 +407,7 @@ fallback behind "Try another way", and an exec agent can take it and finish the
 sign-in on its own. Say so in the prompt instead of treating passkeys as fatal.
 
 Files and downloads live inside the session directory: `pwd` is
-`~/.aside/u/0/sessions/<session-id>`, so a relative `./artifacts/` path is already
+`<account-root>/sessions/<session-id>`, so a relative `./artifacts/` path is already
 inside the account root. Anything outside the roots throws
 `Path escapes Project and session roots: <path>` immediately rather than suspending,
 which is the opposite of the exec file tools.
@@ -422,7 +419,7 @@ download handling, and the service globals:
 ## What Aside already knows
 
 Aside ships skills covering Gmail, Google Docs and Sheets, Notion, Slack, X,
-KakaoTalk, iMessage, YouTube, Chrome APIs, seven password managers, CAPTCHA
+KakaoTalk, YouTube, Chrome APIs, seven password managers, CAPTCHA
 solving, and document formats, plus a set of site-specific skills for services like
 Jira, Linear, GitHub, and Trello.
 
@@ -432,15 +429,9 @@ CLI-listed subset (11 names on 1.26.902, `evidence/probe-K-skills-list.log`; not
 identical to the repl-backed set) and `aside skills show <name>` prints any skill's
 body, which is how to learn what a skill will do or to drive its repl global yourself.
 
-```bash
-perl -e 'alarm shift; exec @ARGV' 300 aside exec --permission full-access "Use the google-sheets skill to read the totals from <url>.
-Report each row label and its total.
-Write and edit files only under ~/.aside/u/0/. Read other local paths only when
-this prompt names them, and never modify them.
-Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
-Do not ask me any questions. If something is blocked or ambiguous, pick the most
-reasonable option and continue, or report exactly what blocked you and stop."
-```
+Name the skill in the first sentence, then append the three clauses above:
+`Use the google-sheets skill to read the totals from <url>. Report each row label
+and its total.` The rest of the prompt and the deadline are unchanged.
 
 Naming the skill usually beats describing the workflow, because several of them
 reach an API and never open a tab at all. `aside skills install` copies Aside's own
@@ -479,12 +470,12 @@ hand. Since `1.26.902` it can create and run agent tasks for a connected client.
 
 **Wrong account.** `aside account list` shows which is signed in. If you switch
 with `aside account use <id>`, re-confirm with `aside account list` and rewrite
-every `~/.aside/u/0/` in your clauses to the new account's root before running
+every account-root path in your clauses to the new account's root before running
 anything, or each prompt now points outside the allowed roots.
 
 ## Boundaries
 
-Everything Aside writes belongs under `~/.aside/u/0/`, and with `full-access` the
+Everything Aside writes belongs under the account root, and with `full-access` the
 first prompt clause is the only thing holding that line. Codex has full filesystem
 access of its own, so when a result needs to reach the workspace, let Aside write
 it inside its root and copy it out yourself. Copying out is the default and it is
@@ -495,5 +486,6 @@ tell the user a run was opened when the task touches anything outside Aside's ro
 The settings-level root grant is the narrow alternative for one directory; keep it
 to that directory, restore it in the same turn, and say what was granted.
 
-`~/.aside/u/0/models.json` and `accounts.json` can hold plaintext credentials.
+The account's `models.json`, and `accounts.json` at the data root one level above
+it, can hold plaintext credentials.
 Never print or commit them.
