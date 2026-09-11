@@ -175,7 +175,8 @@ SKILL.md와 scheduling.md에서 빼낸 macOS 호스트 레이어를 그대로 �
 `perl -e 'alarm shift; exec @ARGV'`, exit 142 근거표, `shlock`, cron/LaunchAgent, Seatbelt.
 
 bash 칸만 옮기면 D1 위반이다. 같은 프리미티브를 PowerShell 에서 부르는 칸을 나란히 적는다.
-데드라인은 `Start-Process -PassThru` + `WaitForExit(ms)` + `exit 142`,
+데드라인은 `Start-Process -PassThru` + `WaitForExit(ms)`, 발화 시 `$p.Kill()` 후 `exit 142`.
+`taskkill` 은 Windows 전용이라 이 칸에서는 쓰지 않는다.
 락은 `shlock` 을 `&` 로 호출, LaunchAgent 의 `ProgramArguments` 는 `pwsh -File` 도 가능하다.
 macOS 에 pwsh 가 없으면 그 칸은 문서상 계약이며 프리미티브는 동일하다고 명시한다.
 

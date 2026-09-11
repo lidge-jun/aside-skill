@@ -14,9 +14,9 @@
 
 두 안을 놓고 골랐다.
 
-| | A. Git Bash + 심 | B. `.ps1` 병행 포팅 |
+| | A. `.sh` 단일 구현 + PowerShell 진입점 | B. `.ps1` 병행 포팅 |
 |---|---|---|
-| 공수 | 1~2일 | 4~6일 + 영구 이중 유지 |
+| 공수 | 1~2일 + 진입점 0.5일 | 4~6일 + 영구 이중 유지 |
 | 드리프트 | 머지 정책 1벌 | 오케스트레이터 2벌이 갈라진다 |
 | 위험 | PATH의 `bash`/`python3` 스텁 | 락·병렬·머지중단 재구현 |
 
@@ -118,10 +118,16 @@ git config merge.aside.driver "\"$PY_WIN\" \"$DRIVER_WIN\" %O %A %B %P"
 `chmod +x` (install.sh:98) 의존은 버린다. NTFS + `core.filemode=false` 에서 실행 비트는 남지 않고,
 인터프리터를 명시하면 애초에 필요 없다.
 
-검증 (C): `git config merge.aside.driver` 출력에 python 경로와 따옴표가 보인다.
-양쪽 브랜치에서 `MEMORY.md` 를 서로 다르게 고친 뒤 머지해 충돌 마커 없이 구조 병합되는지 확인.
-**exit code로 검증하지 말 것.** 드라이버가 아예 실행되지 않아도 git은 충돌로 보고한다.
-병합 결과 파일의 내용을 직접 확인해야 한다.
+검증 (C): `git config merge.aside.driver` 출력의 token 0 이 실제 인터프리터 경로이고,
+두 경로가 정슬래시이며 각각 따옴표로 감싸여 있고 `%O %A %B %P` 는 맨몸이다.
+
+동작 확인은 **일회용 클론**에서 `TAXONOMY.md` 로 한다. 같은 줄을 양쪽 브랜치에서 다르게 고치고
+머지한 뒤, 결과 파일이 **양쪽의 고유 문자열을 모두 담고 있으며 어느 부모와도 같지 않은지**를 본다.
+
+`exit code` 로도, "충돌 마커가 없다" 로도 판정하지 않는다. 둘 다 드라이버가 실행조차 못 한 경우를
+통과시킨다. 코퍼스 #57 의 실패 A/B 는 `exit 1` 에 작업트리가 `ours` 그대로였고 `<<<<<<<` 도 없었다.
+`MEMORY.md` 의 서로 다른 절 수정은 드라이버 없이도 기본 병합이 통과하므로 오라클로 쓸 수 없다.
+`TAXONOMY.md` 를 쓰는 이유는 분류가 `other` 라 드라이버가 없으면 반드시 깨지기 때문이다.
 
 ## WP3 - bin/aside-memory-merge: Windows I/O 2곳
 
@@ -155,7 +161,9 @@ launchd의 대응물이 그것이고(사용자 모드, 주기, 재부팅 생존,
 - 로그온 시에만 실행 (`LogonType Interactive`)
 - 우선순위 8~10 (launchd `Nice 10` / `LowPriorityIO` 대응)
 - **이미 실행 중이면 새 인스턴스 시작 안 함** — 네이티브 락
-- `--remove` → `schtasks /Delete /TN AsideAutosync /F`
+- `--remove` → `schtasks /Delete /TN <태스크 이름> /F`.
+  제품 기본 이름은 `AsideAutosync` 로 두되, **태스크 이름을 인자로 덮어쓸 수 있게** 한다.
+  그래야 검증이 사용자의 실제 태스크를 건드리지 않고 `--remove` 경로까지 실행할 수 있다.
 
 락은 그대로 둔다. `autosync.sh:68-77` 의 mkdir 락은 Git Bash에서 원자적으로 동작함을 확인했고
 (`두 번째 mkdir → File exists`), `find -mmin +30` 스테일 회수도 GNU find 4.10에서 돈다.
@@ -230,7 +238,7 @@ WP5(문서)가 마지막인 이유는 WP6 의 진입점 이름이 확정돼야 R
 1. Windows Git Bash에서 `install.sh` 가 끝까지 통과한다 (현재는 `hostname -s` 에서 중단).
 2. `git config merge.aside.driver` 의 token 0 이 실제 인터프리터 경로이고, 경로가 **정슬래시**이며
    양쪽이 따옴표로 감싸여 있고 `%O %A %B %P` 는 따옴표 없이 남아 있다. `WindowsApps` 경로가 아니다.
-3. macOS에서 고친 `MEMORY.md` 와 Windows에서 고친 같은 파일이 충돌 마커 없이 병합된다.
+3. 양쪽에서 같은 줄을 다르게 고친 `TAXONOMY.md` 가 구조 인식 병합을 거친다.
    **판정은 git 의 exit code 도, "충돌 마커가 없다" 도 아니다.** 둘 다 드라이버가 실행조차
    못 한 경우를 통과시킨다. 코퍼스 #57 의 실패 A/B 는 `exit 1` 에 작업트리가 `ours` 그대로였고,
    거기에도 `<<<<<<<` 는 없었다.
