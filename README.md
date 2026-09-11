@@ -46,6 +46,13 @@ ls ~/.codex/skills/aside-jun/SKILL.md
 
 Use `"$CODEX_HOME/skills/aside-jun"` when that variable is set.
 
+```powershell
+Copy-Item -Recurse -LiteralPath aside-skill\aside-jun -Destination "$env:USERPROFILE\.codex\skills\aside-jun"
+Get-Item -LiteralPath "$env:USERPROFILE\.codex\skills\aside-jun\SKILL.md"
+```
+
+Use `$env:CODEX_HOME\skills\aside-jun` when that variable is set.
+
 ### Claude Code
 
 Same layout, no conversion needed: this skill already uses `SKILL.md` with
@@ -54,6 +61,10 @@ supporting-file structure Claude Code expects.
 
 ```bash
 cp -R aside-skill/aside-jun ~/.claude/skills/aside-jun
+```
+
+```powershell
+Copy-Item -Recurse -LiteralPath aside-skill\aside-jun -Destination "$env:USERPROFILE\.claude\skills\aside-jun"
 ```
 
 The **directory name becomes the slash command**, so this installs as
@@ -127,12 +138,10 @@ step shows only in the transcript. Both were verified against a live install.
 `--permission full-access` removes the deny for the paths a task names, and the
 fixed prompt contract plus a host timeout cover the rest.
 
-That deadline is spelled for macOS, which is the only platform Aside runs on. macOS
-ships neither `timeout` nor `flock`, and the failure is quiet: `timeout 300 aside
-exec` exits 127 before `aside` starts, so the guard against a parked run is itself
-missing on every stock machine. The skill uses `perl -e 'alarm ...'` for the
-deadline and `shlock` for the scheduling lock, both base-system tools, both checked
-against a real parked run and a real stale lock.
+That deadline lives in the host layer, not in this README. macOS and Windows each
+have a file with bash and PowerShell recipes:
+`aside-jun/references/host-macos.md` and `aside-jun/references/host-windows.md`.
+A fired deadline exits `142` on every OS and shell. Do not call a bare `timeout`.
 
 It also routes work between the two surfaces. `exec` delegates to Aside's agent for
 logins, judgment, and Aside's own builtin skills. `repl` is a Playwright-style
@@ -146,14 +155,22 @@ sequence for a task that needs one outside directory.
 
 ## Requirements
 
-macOS, since Aside ships only a `Mach-O` CLI and its daemon needs the GUI app.
-Aside installed with its CLI on `PATH`, and at least one signed-in account. Verify
-with `aside account list`.
+macOS or Windows. The CLI is Mach-O on macOS and PE `aside.exe` on Windows. A
+local run needs the GUI app. At least one signed-in account; verify with
+`aside account list`.
 
-No Homebrew packages are required. The shell commands use `perl` and `shlock` from
-the base system, so nothing needs installing; `coreutils` is mentioned only as an
-optional way to get the GNU spellings back.
+Install the Aside CLI:
 
-The skill was rebuilt against CLI `1.26.902.1732` and daemon `1.26.902.1713` on
-macOS 27.0 arm64 (first built on 1.26.810 / 1.26.829). Offsets cited in the
-research notes are build-specific; the behavioral rules are not.
+- macOS: the documented `curl ... install.sh | bash` path.
+- Windows: Settings > Developers. That is the documented Windows route
+  (components changelog 1.26.907.1712). `curl | bash` is not.
+
+Host-layer commands (deadline, lock, scheduler) are in
+`aside-jun/references/host-macos.md` and `aside-jun/references/host-windows.md`.
+Each file has bash and PowerShell forms. PATH `python3` on Windows is the Store
+stub; use the Aside bundled runtime.
+
+Measured against CLI `1.26.906.1630`, GUI `1.0.910.1`, daemon `1.26.910.1749` on
+both macOS 27.0 arm64 and Windows 11 (26200). Older research notes cite
+`1.26.902.1732` / `1.26.902.1713`. Offsets in those notes are build-specific;
+the behavioral rules are not. Do not pin a version string as a requirement.

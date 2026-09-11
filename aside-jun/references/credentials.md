@@ -4,7 +4,114 @@ Aside can sign in to sites for you, but the credential layer has a first-run tra
 that parks a CLI run (or, on 1.26.902, ends it unanswered) if it is not settled
 beforehand. Read this before asking `exec` to log in anywhere.
 
-## The trap
+The trap is not the same on both platforms. Windows has no `apple-passwords`
+builtin skill. macOS still has Apple Passwords, the PasswordImporter container,
+`com.apple.quarantine`, `pgrep`, and `open -a Aside`. Use the section that matches
+the OS. The JSON key `biometricUnlockEnabled` is the same on both and was
+measured `false` on both; leave it off.
+
+## Windows: passwordManager and the provider skills
+
+On Windows, start with Aside's own `passwordManager` (exec's repl tool only) and
+the provider skills that ship in the Windows builtin tree: `1password`,
+`bitwarden`, `dashlane`, `lastpass`, `proton-pass`. All five are present on
+Windows. None of them needs the Apple Passwords PIN handshake.
+
+If the user has a choice of provider, 1Password is the smoother one for
+agent-driven sign-in. Aside ships a builtin `1password` skill that `exec` can
+load by name. The other four sidestep a vault-PIN ceremony the same way.
+
+Practical sequence on Windows: the user signs in once in the Aside window, or
+`exec` searches the Aside vault / a connected provider and autofills. Do not
+ask `exec` to perform an Apple Passwords key ceremony; that skill is not there.
+
+## Leave biometric unlock off
+
+The stored form is `biometricUnlockEnabled` in the account-root passwords
+settings file. On macOS that is Touch ID. On Windows it is Windows Hello. The
+key name is the same, and it was measured `false` on both (Windows host
+2026-09-11, `autoLockTimeout` 10080). Keep it disabled. With it off, a one-time
+PIN or provider unlock is all the vault needs. Turning it on re-arms a gate an
+agent cannot pass.
+
+The daemon makes the mechanism concrete: `checkPasswordVerificationRequired`
+returns false immediately while `biometricUnlockEnabled` is false, and once the
+setting is on it re-arms a password re-verification every
+`accountPasswordVerificationInterval` days (30 on this account) - a prompt no
+non-interactive run can answer. Verified against daemon 1.26.903.1631. Aside
+1.26.822 notes that Touch ID is skipped after a passkey dialog, but that is the
+OS passkey sheet, not a vault first-run handshake, and no Touch-ID symbol
+survives in the daemon bundle, so it stays unverified and the setting stays off.
+
+Confirm it reads `false` with the Aside bundled runtime python, not PATH
+`python3`. On Windows, PATH `python3` is the Store stub (exit 49).
+
+```powershell
+# Windows / PowerShell (5.1 and 7)
+$py = Join-Path $env:USERPROFILE '.aside\runtime\bin\python3.cmd'
+$settings = Join-Path $env:USERPROFILE '.aside\u\0\passwords\settings.json'
+& $py -c "import json,sys; print(json.load(open(sys.argv[1]))['biometricUnlockEnabled'])" $settings
+```
+
+```bash
+# Windows / Git Bash
+PY="$USERPROFILE/.aside/runtime/bin/python3.cmd"
+SETTINGS="$USERPROFILE/.aside/u/0/passwords/settings.json"
+"$PY" -c "import json,sys; print(json.load(open(sys.argv[1]))['biometricUnlockEnabled'])" "$SETTINGS"
+```
+
+```bash
+# macOS / bash
+PY="$HOME/.aside/runtime/bin/python3"
+SETTINGS="$HOME/.aside/u/0/passwords/settings.json"
+"$PY" -c "import json,sys; print(json.load(open(sys.argv[1]))['biometricUnlockEnabled'])" "$SETTINGS"
+```
+
+```powershell
+# macOS / PowerShell
+$py = "$HOME/.aside/runtime/bin/python3"
+$settings = "$HOME/.aside/u/0/passwords/settings.json"
+& $py -c "import json,sys; print(json.load(open(sys.argv[1]))['biometricUnlockEnabled'])" $settings
+```
+
+PIN is a one-time setup. Biometrics is a permanent gate. Off is the working
+configuration.
+
+The reasoning behind that instruction, including the daemon predicate it rests on, is in
+`devlog/_plan/260903_parity-and-probes/001_probe-remote-and-touchid.md`.
+
+Also worth checking once: `autoLockTimeout` in the same file is in minutes
+(`10080` is a week). A short timeout means the vault re-locks between runs and the
+PIN ceremony returns.
+
+If you quit Aside to edit that file, relaunch it:
+
+```powershell
+# Windows / PowerShell (5.1 and 7)
+Start-Process -FilePath 'C:\Program Files\Aside\Application\Aside.exe'
+```
+
+```bash
+# Windows / Git Bash
+"/c/Program Files/Aside/Application/Aside.exe" &
+```
+
+```bash
+# macOS / bash
+open -a Aside
+```
+
+```powershell
+# macOS / PowerShell
+Start-Process -FilePath /usr/bin/open -ArgumentList @('-a','Aside')
+```
+
+Do not read `$LASTEXITCODE` after `Start-Process`. A launch does not need
+`WaitForExit`; this is not the exec deadline recipe.
+
+## macOS-only: Apple Passwords
+
+Windows has no `apple-passwords` skill. The rest of this section is macOS.
 
 Apple Passwords keeps its own encryption key. Until that key is unlocked in the
 current Aside session, every credential read fails:
@@ -35,74 +142,49 @@ because the standing clauses forbade questions:
 > "The vault unlock step failed because a 6-digit PIN prompt appeared on macOS
 > that I cannot complete myself. I reported exactly what appeared and stopped."
 
-## Recommended: use 1Password instead
-
-If the user has a choice, 1Password is the smoother provider for agent-driven
-sign-in. It avoids the Apple Passwords first-run PIN handshake entirely, and Aside
-ships a builtin `1password` skill that `exec` can load by name.
-
-Aside also supports Bitwarden, Dashlane, LastPass, and Proton Pass, each with its
-own builtin skill. Any of them sidesteps the Apple Passwords key ceremony.
-
-## If Apple Passwords is the choice
-
-Two things must be true before any `exec` login task, and both need a human at the
-keyboard once.
+Two things must be true before any `exec` login task on Apple Passwords, and both
+need a human at the keyboard once.
 
 **1. Complete the one-time 6-digit setup.** In Aside, open Settings, go to the
 password manager section, and connect Apple Passwords. Install the Apple Passwords
 Importer when prompted. Then trigger the unlock once and enter the 6-digit code
-macOS displays. From a terminal you can trigger it with:
+macOS displays.
 
 ```bash
+# macOS / bash
 aside repl "console.log(JSON.stringify(await applePasswords.requestAuth()))"
 # read the 6-digit code off the macOS prompt, then:
 aside repl "await applePasswords.verifyAuth('<6-digit-code>'); console.log('unlocked')"
 ```
 
+```powershell
+# macOS / PowerShell
+& "$HOME/.local/bin/aside" repl "console.log(JSON.stringify(await applePasswords.requestAuth()))"
+& "$HOME/.local/bin/aside" repl "await applePasswords.verifyAuth('<6-digit-code>'); console.log('unlocked')"
+```
+
 Confirm it worked before delegating anything:
 
 ```bash
+# macOS / bash
 aside repl "try{const l=await applePasswords.listLogins();console.log('UNLOCKED',l.length)}catch(e){console.log('LOCKED',e.message)}"
 ```
 
-**2. Leave "Unlock with Touch ID" OFF.** In the Apple Passwords settings there is an
-option along the lines of *Unlock the vault with your biometrics*. Keep it
-disabled. With it off, the 6-digit PIN you set in step 1 is all the vault needs and
-agent-driven sign-in works normally. Turning it on re-arms a gate an agent cannot pass.
-The daemon makes the mechanism concrete: `checkPasswordVerificationRequired` returns
-false immediately while `biometricUnlockEnabled` is false, and once the setting is on it
-re-arms a password re-verification every `accountPasswordVerificationInterval` days
-(30 on this account) - a prompt no non-interactive run can answer. Verified against
-daemon 1.26.903.1631. Aside 1.26.822 notes that Touch ID is skipped after a passkey
-dialog, but that is the OS passkey sheet, not the Apple Passwords first-run handshake
-described here, and no Touch-ID symbol survives in the daemon bundle, so it stays
-unverified and the setting stays off.
-
-The stored form is `biometricUnlockEnabled` in
-`~/.aside/u/0/passwords/settings.json`. Confirm it reads `false`:
-
-```bash
-python3 -c "import json;print(json.load(open('$HOME/.aside/u/0/passwords/settings.json'))['biometricUnlockEnabled'])"
+```powershell
+# macOS / PowerShell
+& "$HOME/.local/bin/aside" repl "try{const l=await applePasswords.listLogins();console.log('UNLOCKED',l.length)}catch(e){console.log('LOCKED',e.message)}"
 ```
 
-PIN is a one-time setup. Biometrics is a permanent gate. Off is the working
-configuration.
+**2. Leave biometric unlock off**, as in the section above. The Apple Passwords
+settings label is along the lines of *Unlock the vault with your biometrics*.
 
-The reasoning behind that instruction, including the daemon predicate it rests on, is in
-`devlog/_plan/260903_parity-and-probes/001_probe-remote-and-touchid.md`.
-
-Also worth checking once: `autoLockTimeout` in the same file is in minutes
-(`10080` is a week). A short timeout means the vault re-locks between runs and the
-PIN ceremony returns.
-
-## Importer install failure
+### Importer install failure
 
 Connecting Apple Passwords may fail with:
 
 ```
 EPERM: operation not permitted, open
-'~/Library/Containers/at.studio.AsideBrowser.PasswordImporter/Data/.aside/
+'$HOME/Library/Containers/at.studio.AsideBrowser.PasswordImporter/Data/.aside/
  apple-credential-exchange-helper-context.json'
 ```
 
@@ -111,27 +193,38 @@ This is a stale sandbox container left behind by an earlier install, carrying a
 the way, then relaunch and press Install so macOS recreates it:
 
 ```bash
+# macOS / bash
 pgrep -f Aside            # must be empty first
-mkdir -p ~/.aside-container-backup
-mv ~/Library/Containers/at.studio.AsideBrowser.PasswordImporter ~/.aside-container-backup/
+mkdir -p "$HOME/.aside-container-backup"
+mv "$HOME/Library/Containers/at.studio.AsideBrowser.PasswordImporter" "$HOME/.aside-container-backup/"
 open -a Aside
 ```
 
+```powershell
+# macOS / PowerShell
+& /usr/bin/pgrep -f Aside            # must be empty first
+New-Item -ItemType Directory -Force -Path "$HOME/.aside-container-backup" | Out-Null
+Move-Item -LiteralPath "$HOME/Library/Containers/at.studio.AsideBrowser.PasswordImporter" -Destination "$HOME/.aside-container-backup/"
+Start-Process -FilePath /usr/bin/open -ArgumentList @('-a','Aside')
+```
+
 Move rather than delete, so it can be restored. The container holds no
-credentials; the real vault is `~/.aside/u/0/passwords/vault.encrypted.db`. This
-was verified to fix the EPERM.
+credentials; the real vault is `$HOME/.aside/u/0/passwords/vault.encrypted.db`. This
+was verified to fix the EPERM. There is no PasswordImporter container on Windows.
 
 ## Two credential surfaces
 
-`applePasswords` is available in `aside repl` and is the one that needs the key
-ceremony. `passwordManager` is Aside's own native manager, exposed to the **exec
-agent only** (it is `undefined` in a CLI repl session), and it never reveals secret
-values. The builtin `password-manager` skill documents it; `exec` can load that
-skill by name.
+`applePasswords` is available in `aside repl` on macOS and is the one that needs
+the key ceremony. It is not a Windows builtin skill. `passwordManager` is Aside's
+own native manager, exposed to the **exec agent only** (it is `undefined` in a CLI
+repl session), and it never reveals secret values. The builtin `password-manager`
+skill documents it; `exec` can load that skill by name. That surface is the one
+Windows has.
 
-Practical consequence: unlock `applePasswords` from repl yourself before
+Practical consequence: on macOS, unlock `applePasswords` from repl yourself before
 delegating, or let `exec` use `passwordManager` and the provider skills. Do not
-ask `exec` to perform the Apple Passwords key ceremony.
+ask `exec` to perform the Apple Passwords key ceremony. On Windows, skip
+`applePasswords` and use `passwordManager` / the provider skills.
 
 ### The unlock outlives the session
 
@@ -197,19 +290,20 @@ await passwordManager.unlockExternalPasswordManager(page, '1password');
 ```
 
 Providers are `1password`, `bitwarden`, `dashlane`, `lastpass`, `proton-pass`. If no
-saved unlock item exists the call reports so; fall back to the Aside vault rather
+saved unlock item exists the call reports so; use the Aside vault rather
 than asking.
 
 **A passkey prompt.** Usually a fork, not a wall. Look for "Try another way" and a
 password or OAuth fallback first; a verified run took exactly that detour and
 finished the sign-in on its own. Passkey assertion itself does require a human
-gesture, and macOS may demand biometric confirmation at use time, so treat it as a
-human step only once no fallback is offered. Then the user signs in once in the
-Aside window and `exec` inherits the live session.
+gesture, and the OS may demand biometric confirmation at use time (Touch ID on
+macOS, Windows Hello on Windows), so treat it as a human step only once no
+fallback is offered. Then the user signs in once in the Aside window and `exec`
+inherits the live session.
 
 **A TOTP field.** If the provider already filled it, verify and move on. Otherwise
-`applePasswords.getOtps(url)` returns codes once the vault is unlocked. Never print
-a seed or a recovery code.
+on macOS `applePasswords.getOtps(url)` returns codes once the vault is unlocked.
+That call is not a Windows builtin path. Never print a seed or a recovery code.
 
 **A CAPTCHA.** `captcha.click(page, bounds)` for checkboxes,
 `captcha.drag(page, from, to)` for sliders, `captcha.readText(page, bounds)` for
@@ -237,7 +331,7 @@ Eight methods, from Aside's builtin `password-manager` skill:
 ever seeing the password. Categories include `login`, `credit-card`, and
 `identity`, so checkout forms use the same `autofillItem` path.
 
-There is no TOTP method here; codes come from `applePasswords.getOtps(url)`.
+There is no TOTP method here. On macOS, codes come from `applePasswords.getOtps(url)`.
 
 ## The pattern that works
 
@@ -247,7 +341,7 @@ that park a run.
 
 ## Two runs worth learning from
 
-Both were real `aside exec` runs against a live browser. Account addresses are
+Both were real `aside exec` runs against a live browser on macOS. Account addresses are
 masked here; use your own.
 
 ### It stopped instead of hanging
@@ -261,7 +355,7 @@ run in 27 seconds with exit 0:
 
 On the build this ran on, without the no-questions clause the agent would have
 called `ask_user_question` and the run would have sat silent until the shell
-timeout. On 1.26.902 the tool is absent from CLI sessions, so the clause now
+deadline. On 1.26.902 the tool is absent from CLI sessions, so the clause now
 prevents a question typed into chat that ends the run unanswered; either way it
 converts a dead end into a clean, informative failure.
 
@@ -280,12 +374,13 @@ the clause is doing real work here: the same sentence that prevents questions al
 authorizes the detour. Since 1.26.824 the agent clears the clipboard after copying a
 credential, so a run that copied a password leaves nothing behind.
 
-### The bash rule held
+### The file-tool rule held
 
-Asked to save a screenshot under `~/.aside/u/0/`, the agent captured into the
-session tmp directory and then moved the file with `bash` `cp` rather than
+Asked to save a screenshot under the account root, the agent captured into the
+session tmp directory and then moved the file with the `bash` tool rather than
 `write_file`. That is the file-tool rule behaving correctly on a path the file
-tools should not touch.
+tools should not touch. On Windows that `bash` tool is PowerShell; do not put bash
+syntax in it.
 
 ### Model selection
 

@@ -137,10 +137,14 @@ an action.
 ## Research that needs an account
 
 Signing up to read documentation, logging into a portal, clearing a CAPTCHA - repl
-cannot do these, because `passwordManager` lives only in exec's repl tool. Delegate:
+cannot do these, because `passwordManager` lives only in exec's repl tool. Delegate
+under the host-layer deadline for this OS. Bash and PowerShell recipes are in
+[host-macos.md](host-macos.md) and [host-windows.md](host-windows.md). Do not wrap
+the prompt in `perl -e 'alarm ...'`, a bare `timeout`, or a remembered
+`Start-Process` line. A fired deadline exits `142` on every OS and shell.
 
-```bash
-perl -e 'alarm shift; exec @ARGV' 600 aside exec "Research <question> using <site>, which requires an account.
+```text
+aside exec --permission full-access -- "Research <question> using <site>, which requires an account.
 
 If a sign-in is needed, use your repl tool: search the vault with
 passwordManager.listItems({ text: '<host>', category: 'login' }) and fill a clearly
@@ -164,16 +168,18 @@ If a passkey appears, try 'Try another way' and a password fallback first.
 
 Then answer <question>. For every claim, report the exact URL you read it on and quote
 the sentence that supports it. Do not summarise a page you did not open.
-Write your notes to ~/.aside/u/0/research/<slug>.md.
+Write your notes to <account-root>/research/<slug>.md.
 
-Write and edit files only under ~/.aside/u/0/. Read other local paths only when
+Write and edit files only under <account-root>. Read other local paths only when
 this prompt names them, and never modify them.
-Downloading to ~/Downloads is fine; move anything you keep under ~/.aside/u/0/.
+Downloading to <downloads> is fine; move anything you keep under <account-root>.
 Do not ask me any questions. If something is blocked or ambiguous, pick the most
 reasonable option and continue, or report exactly what blocked you and stop."
 ```
 
 Then copy the notes out yourself; Codex has the filesystem access Aside does not.
+Substitute `<account-root>` and `<downloads>` with absolute paths from the host
+file for this OS. Never send a literal `~`.
 
 The reason signup is in the default template is that the alternative is worse. Stopping
 at a free registration wall means either abandoning the source or having the user create

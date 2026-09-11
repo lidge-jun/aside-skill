@@ -45,6 +45,11 @@ session no longer reaches it under any `--permission` value. Measured on CLI
 | `read_file` on the same workspace file with `--permission full-access` | contents returned in 4.2s | `probe-B-full-readfile.log` |
 | `bash head` on the workspace file and `cat /etc/hosts` | both succeeded (`sandbox.enabled` false on this install) | `probe-D-bash-outside.log` |
 
+The `bash` row is the macOS 1.26.902 probe (`permission.sandbox.enabled` false).
+Windows 1.26.906 has `permission.sandbox.enabled` true; under `guard` the shell
+tool deadlocks and prints no denial. File-tool denials match on both platforms;
+the shell tool does not. See the platform branch below.
+
 The Sep 2 release note says it plainly: "permission / ask user question tool /
 final confirm won't throw an error" (`evidence/aside-discord-changelog-260902.md`).
 For a CLI session `ask` is downgraded to deny and the question tool is removed.
@@ -68,10 +73,15 @@ aside exec --permission ask "<prompt>"           # accepted, but normalizes to g
 `guard` had denied (probe B); other tools and paths were not exercised, so treat
 it as "the file tools are no longer fenced" rather than as a proof of parity with
 the window. Say in the prompt what a read-only task must not touch and keep
-Aside's own output under `~/.aside/u/0/`.
+Aside's own output under the account root as an absolute path
+(`$HOME/.aside/u/0/` on macOS, `%USERPROFILE%\.aside\u\0\` on Windows).
+`~` is not expanded on Windows: `write_file` reports `Successfully wrote` and
+creates a directory literally named `~`.
 
 `guard` fits a task that must not be able to reach the workspace and can afford
 a skipped step; check the transcript for `blocked by policy` afterwards.
+On Windows, `guard` cannot afford a `bash` call: that tool deadlocks.
+`full-access` is the requirement for any Windows run that will use the shell tool.
 
 `ask` is accepted by CLI 1.26.902 but normalizes to Guard, exactly like `guard`:
 the help text says "--permission ask and --permission guard are the same", and
@@ -109,6 +119,13 @@ outsideWrite   ask
 
 Both `ask` values are the trap. Anything outside these roots suspended through
 1.26.831 and is denied on 1.26.902.
+
+On Windows the same keys are present. Account root is
+`%USERPROFILE%\.aside\u\0` (`C:\Users\super\.aside\u\0` on the measured
+host). Do not treat `%USERPROFILE%\Documents` as Documents: this host's
+Documents folder is OneDrive-redirected to `C:\Users\super\OneDrive\문서`.
+Resolve the shell folder (`[Environment]::GetFolderPath('MyDocuments')`) rather
+than concatenating `Documents` onto the profile path.
 
 ## Flags, then and now
 
@@ -166,7 +183,7 @@ Passing `-m` or `-p` flips `strictModelSelection` to true. Omitting them is not
 just a default; it changes how the model is selected. Leave them off unless a
 specific model is genuinely required.
 
-## bash is governed by a different mechanism
+## The shell tool is governed by a different mechanism
 
 Not every tool goes through the permission check. The daemon's `FILE_TOOL_CALLS`
 gate maps exactly three tools into it:
@@ -179,15 +196,32 @@ FILE_TOOL_CALLS = {
 }
 ```
 
-`bash` is absent from that map, so it never reaches the `ask` verdict and never
-suspends. It is confined instead by an OS sandbox: the daemon shells out through
-`sandbox-exec` with a `SEATBELT_BASE_POLICY`, which **denies** rather than asks.
+That map is the same on macOS and Windows. File-tool denials are also the same.
+A `guard` `read_file` outside the readable roots returns
+`Permission denied: read '<path>' is blocked by policy` after roughly 5s, exit 0,
+run continues: 4.7s on macOS 1.26.902 (`evidence/probe-A-guard-readfile.log`) and
+the same string on Windows 1.26.906 (`evidence/probe-win-permission.md`, ~4.9s).
+`write_file` outside the writable roots is the same shape:
+`Permission denied: write '<path>' is blocked by policy`. Exit 0 is not a success
+signal; look for `is blocked by policy` in stdout.
 
-The practical difference, measured in one command with the account's
-`readableRoots`/`writableRoots` both empty:
+`bash` is absent from that map, so it never reaches the `ask` verdict and never
+suspends through the file-tool gate. It is confined by an OS sandbox instead, and
+the two platforms do not share a sandbox, a denial string, or a failure mode.
+The tool is named `bash` on both; on Windows the interpreter is PowerShell
+(`Shell: powershell` in the catalog). Bash syntax there fails with a
+`ParserError` or fails silently.
+
+### macOS
+
+The daemon shells out through `sandbox-exec` with a `SEATBELT_BASE_POLICY`, which
+**denies** rather than asks. On the measured Mac, `permission.sandbox.enabled` is
+**false**.
+
+Measured in one command with `readableRoots`/`writableRoots` both empty:
 
 ```
-bash: head -1 ~/<a-project>/AGENTS.md ; head -2 /etc/hosts
+bash: head -1 <project>/AGENTS.md ; head -2 /etc/hosts
   -> stderr: head: .../AGENTS.md: Operation not permitted
   -> stdout: ##
              # Host Database
@@ -198,21 +232,68 @@ bash: printf ok > /tmp/_probe.txt && ls -la /tmp/_probe.txt
   -> file really created
 ```
 
-The same workspace path through `read_file` hung indefinitely on that build and is
-denied by policy on 1.26.902.
+The same workspace path through `read_file` hung indefinitely on 1.26.831 and is
+denied by policy on 1.26.902, with the cross-platform string above.
 
-Two consequences worth holding onto. First, under `guard` `bash` is the right tool
-when a path might be outside the roots, because a visible denial beats a silently
-skipped step (or, through 1.26.831, a silent deadlock). Second, the Seatbelt
-boundary is not the same boundary as the
-permission roots: `/etc/hosts` and `/tmp` were reachable while a workspace file was
-not, so do not assume "bash works" means "bash reaches everything."
+Two consequences. Under `guard`, `bash` is the right tool when a path might be
+outside the roots, because a visible `Operation not permitted` beats a silently
+skipped file-tool step. The Seatbelt boundary is not the permission-root
+boundary: `/etc/hosts` and `/tmp` were reachable while a workspace file was not,
+so do not assume "bash works" means "bash reaches everything."
 
 A caveat on provenance: an earlier run of these same probes, taken while the
-account had the whole home directory temporarily added to both root lists, showed `bash`
-reading the workspace file successfully. Re-running after that setting was removed
-produced the denial above. So the Seatbelt profile does track the configured roots
-to some degree; what it does not do is ask.
+account had the whole home directory temporarily added to both root lists, showed
+`bash` reading the workspace file successfully. Re-running after that setting was
+removed produced the denial above. So the Seatbelt profile does track the
+configured roots to some degree; what it does not do is ask.
+
+### Windows
+
+The daemon bundle also contains `AsideWindowsSandboxHelper` (AppContainer +
+JobObject). On the measured Windows 11 host, `permission.sandbox.enabled` is
+**true**. That does not produce a Seatbelt-style denial.
+
+Under `guard`, the shell tool does not print `Operation not permitted` or any
+other denial string. It deadlocks. The helper process is never spawned. There is
+no Windows equivalent of the macOS denial text.
+
+```
+bash(title: 'Read README first line',
+     command: 'Get-Content -TotalCount 1 C:\\Users\\super\\Developers\\aside\\README.md')
+stderr: created new session: X0gol2MDSg8i4O16
+```
+
+The run stops there. Four reproductions (manual kill 130s/75s, deadline kill
+150s/90s). `Write-Output HELLOPROBE`, which touches no file, deadlocked the same
+way at 90s, so this is not a file-policy miss. While hung: CPU 0.20s (not a
+spin), `Responding=True`, no `AsideWindowsSandboxHelper.exe` child, no approval
+prompt on stdout/stderr/PTY or in the desktop app, session `messages.jsonl` has a
+`toolCall` and no matching tool result (`001_parity-ledger-windows.md` §2).
+
+The matching path pair for the macOS probe is
+`C:\Windows\System32\drivers\etc\hosts` and `$env:TEMP\_probe.txt`. They were not
+reached under `guard`; the session never returned.
+
+The same command with `--permission full-access` finished in 9.6s, exit 0:
+
+```
+ > # aside
+[powershell] current cwd changed to C:\Users\super\.aside\u\0\
+```
+
+A file written under full-access lists as an ordinary NTFS file, not a macOS
+`wheel`/`@` line:
+
+```
+Get-Item -LiteralPath $env:TEMP\_probe.txt
+  -> Mode: -a----  Length: 2
+  -> FullName: C:\Users\super\AppData\Local\Temp\_probe.txt
+```
+
+Under `guard` on Windows, do not call the `bash` tool. Use the file tools, which
+fail fast with the same `Permission denied: ... is blocked by policy` string as
+macOS, or run with `--permission full-access`. A host deadline is required:
+without one, the hung `bash` call consumes the whole turn.
 
 ## Granting a path on purpose
 
@@ -223,32 +304,146 @@ fence, not the write fence SKILL.md uses under `full-access`.
 
 When the task genuinely needs a specific outside path, widen the roots first
 rather than hoping. `aside.settings.set` writes the account permission config, and
-a session created afterwards picks it up:
+a session created afterwards picks it up. Deadline sentinel is 142 on every OS
+and shell. On Windows this grant is for the file tools; the `bash` tool still
+deadlocks under `guard` even after a grant.
 
 ```bash
+# macOS / bash
+ASIDE="$HOME/.local/bin/aside"
+ROOTS=/tmp/aside-roots.json
+PROMPT="<task using that path> <clauses, first one naming both roots>"
+
 # 1. save what is already configured - do not skip this
 # 2>/dev/null drops the CLI's timing line; head -1 keeps just the JSON
-aside repl "console.log(JSON.stringify(aside.settings.get('permission').files))" \
-  2>/dev/null | head -1 > /tmp/aside-roots.json
-cat /tmp/aside-roots.json
+"$ASIDE" repl "console.log(JSON.stringify(aside.settings.get('permission').files))" \
+  2>/dev/null | head -1 > "$ROOTS"
+cat "$ROOTS"
 
 # 2. grant, adding to the saved lists rather than replacing them.
-# Grant reads only, or reads and writes - but match what the clause allows.
-aside repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
+"$ASIDE" repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
 n.files.readableRoots=[...n.files.readableRoots,'<abs-path>']; \
 n.files.writableRoots=[...n.files.writableRoots,'<abs-path>']; \
 aside.settings.set('permission',n); \
 console.log(JSON.stringify(aside.settings.get('permission').files))"
 
 # 3. run, with the granted-root variant of the clauses
-perl -e 'alarm shift; exec @ARGV' 300 aside exec "<task using that path> <clauses, first one naming both roots>"
+/usr/bin/perl -e 'alarm shift; exec @ARGV' 300 "$ASIDE" exec -- "$PROMPT"
 
 # 4. restore the saved values, not empty lists
-aside repl "const saved=$(cat /tmp/aside-roots.json); \
+saved_json=$(cat "$ROOTS")
+"$ASIDE" repl "const saved=$saved_json; \
 const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
 n.files.readableRoots=saved.readableRoots; n.files.writableRoots=saved.writableRoots; \
 aside.settings.set('permission',n); \
 console.log(JSON.stringify(aside.settings.get('permission').files))"
+```
+
+```bash
+# Windows / Git Bash
+ASIDE="$LOCALAPPDATA/Aside/CLI/current/aside.exe"
+[ -x "$ASIDE" ] || ASIDE=$(ls -1 "$LOCALAPPDATA"/Aside/CLI/versions/*/aside.exe | sort | tail -1)
+ROOTS="$TEMP/aside-roots.json"
+PROMPT="<task using that path> <clauses, first one naming both roots>"
+
+# 1. save what is already configured - do not skip this
+"$ASIDE" repl "console.log(JSON.stringify(aside.settings.get('permission').files))" \
+  2>/dev/null | head -1 > "$ROOTS"
+cat "$ROOTS"
+
+# 2. grant, adding to the saved lists rather than replacing them.
+"$ASIDE" repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
+n.files.readableRoots=[...n.files.readableRoots,'<abs-path>']; \
+n.files.writableRoots=[...n.files.writableRoots,'<abs-path>']; \
+aside.settings.set('permission',n); \
+console.log(JSON.stringify(aside.settings.get('permission').files))"
+
+# 3. run, with the granted-root variant of the clauses
+/usr/bin/timeout --kill-after=5 300 "$ASIDE" exec -- "$PROMPT"
+rc=$?
+if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then rc=142; fi
+
+# 4. restore the saved values, not empty lists
+saved_json=$(cat "$ROOTS")
+"$ASIDE" repl "const saved=$saved_json; \
+const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); \
+n.files.readableRoots=saved.readableRoots; n.files.writableRoots=saved.writableRoots; \
+aside.settings.set('permission',n); \
+console.log(JSON.stringify(aside.settings.get('permission').files))"
+exit $rc
+```
+
+```powershell
+# macOS / PowerShell
+# If pwsh is not installed, this cell is the contract; the primitive is the same.
+$aside = "$HOME/.local/bin/aside"
+$rootsFile = "/tmp/aside-roots.json"
+$prompt = "<task using that path> <clauses, first one naming both roots>"
+
+# 1. save what is already configured - do not skip this
+$json = & $aside repl "console.log(JSON.stringify(aside.settings.get('permission').files))" 2>$null |
+  Select-Object -First 1
+Set-Content -LiteralPath $rootsFile -Value $json -Encoding ASCII
+Get-Content -LiteralPath $rootsFile
+
+# 2. grant, adding to the saved lists rather than replacing them.
+& $aside repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); n.files.readableRoots=[...n.files.readableRoots,'<abs-path>']; n.files.writableRoots=[...n.files.writableRoots,'<abs-path>']; aside.settings.set('permission',n); console.log(JSON.stringify(aside.settings.get('permission').files))"
+
+# 3. run, with the granted-root variant of the clauses
+$out = "/tmp/aside-grant-out.txt"
+$err = "/tmp/aside-grant-err.txt"
+$p = Start-Process -FilePath $aside -PassThru -NoNewWindow `
+     -RedirectStandardOutput $out -RedirectStandardError $err `
+     -ArgumentList @('exec','--',$prompt)
+if (-not $p.WaitForExit(300000)) {
+  $p.Kill()
+  $code = 142
+} else {
+  $code = $p.ExitCode
+}
+
+# 4. restore the saved values, not empty lists
+$saved = Get-Content -LiteralPath $rootsFile -Raw
+& $aside repl "const saved=$saved; const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); n.files.readableRoots=saved.readableRoots; n.files.writableRoots=saved.writableRoots; aside.settings.set('permission',n); console.log(JSON.stringify(aside.settings.get('permission').files))"
+exit $code
+```
+
+```powershell
+# Windows / PowerShell (5.1 and 7)
+$aside = Join-Path $env:LOCALAPPDATA 'Aside\CLI\current\aside.exe'
+if (-not (Test-Path -LiteralPath $aside)) {
+  $aside = Get-ChildItem "$env:LOCALAPPDATA\Aside\CLI\versions\*\aside.exe" |
+           Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
+}
+$rootsFile = Join-Path $env:TEMP 'aside-roots.json'
+$prompt = "<task using that path> <clauses, first one naming both roots>"
+
+# 1. save what is already configured - do not skip this
+$json = & $aside repl "console.log(JSON.stringify(aside.settings.get('permission').files))" 2>$null |
+  Select-Object -First 1
+Set-Content -LiteralPath $rootsFile -Value $json -Encoding ASCII
+Get-Content -LiteralPath $rootsFile
+
+# 2. grant, adding to the saved lists rather than replacing them.
+& $aside repl "const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); n.files.readableRoots=[...n.files.readableRoots,'<abs-path>']; n.files.writableRoots=[...n.files.writableRoots,'<abs-path>']; aside.settings.set('permission',n); console.log(JSON.stringify(aside.settings.get('permission').files))"
+
+# 3. run, with the granted-root variant of the clauses
+$out = Join-Path $env:TEMP 'aside-grant-out.txt'
+$err = Join-Path $env:TEMP 'aside-grant-err.txt'
+$p = Start-Process -FilePath $aside -PassThru -NoNewWindow `
+     -RedirectStandardOutput $out -RedirectStandardError $err `
+     -ArgumentList @('exec','--',$prompt)
+if (-not $p.WaitForExit(300000)) {
+  & "$env:SystemRoot\System32\taskkill.exe" /PID $p.Id /T /F | Out-Null
+  $code = 142
+} else {
+  $code = $p.ExitCode
+}
+
+# 4. restore the saved values, not empty lists
+$saved = Get-Content -LiteralPath $rootsFile -Raw
+& $aside repl "const saved=$saved; const c=aside.settings.get('permission'); const n=JSON.parse(JSON.stringify(c)); n.files.readableRoots=saved.readableRoots; n.files.writableRoots=saved.writableRoots; aside.settings.set('permission',n); console.log(JSON.stringify(aside.settings.get('permission').files))"
+exit $code
 ```
 
 Step 1 is not optional. Restoring to `[]` would silently delete roots the user had
@@ -272,17 +467,21 @@ must cover the same operations: `outsideWrite` stays `ask`, so a path present on
 `readableRoots` is still refused on a write.
 
 ```text
-Use read_file, write_file and edit_file only under ~/.aside/u/0/ and <abs-path>. For
-any other local path use the bash tool instead - never the file tools.
+Use read_file, write_file and edit_file only under <account-root> and <abs-path>.
+<account-root> is an absolute path ($HOME/.aside/u/0 on macOS,
+%USERPROFILE%\.aside\u\0 on Windows), never ~.
+macOS: for any other local path use the bash tool instead - never the file tools.
+Windows: do not call the bash tool under guard; stay on the file tools or use
+--permission full-access.
 ```
 
 For a read-only task, drop `writableRoots` from step 2 and narrow the clause to
 match:
 
 ```text
-Use read_file only under ~/.aside/u/0/ and <abs-path>, and write_file and edit_file
-only under ~/.aside/u/0/. For any other local path use the bash tool instead - never
-the file tools.
+Use read_file only under <account-root> and <abs-path>, and write_file and edit_file
+only under <account-root>. macOS: for any other local path use the bash tool
+instead - never the file tools. Windows: do not call the bash tool under guard.
 ```
 
 Revert to the plain clause as soon as the grant is restored.
@@ -300,5 +499,5 @@ granted and that you restored it, and ask first when the scope is broad
 (a whole home directory, or `/`) rather than a specific directory.
 
 The cheaper move is usually to avoid the grant entirely. Aside can write its
-output under `~/.aside/u/0/` and Codex, which has full filesystem access, copies it
-wherever it belongs.
+output under the account root as an absolute path and Codex, which has full
+filesystem access, copies it wherever it belongs.

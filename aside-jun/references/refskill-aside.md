@@ -1,6 +1,10 @@
 <!-- Retained as historical reference. Superseded by the parent aside skill.
      Frontmatter intentionally removed so no skill loader indexes this file. -->
 
+> Historical. Path examples here predate Windows coverage. Prefer the parent
+> `SKILL.md` and the host-layer files. Browser profile: macOS
+> `$HOME/Library/Application Support/Aside/`, Windows `%LOCALAPPDATA%\Aside\User Data`.
+
 # aside-cli — Authenticated Browser Automation
 
 Aside is a Chromium fork with a built-in browser agent. Its CLI runs that agent
@@ -14,7 +18,7 @@ task needs an existing session (admin consoles, X DMs, dashboards behind SSO).
 | Page needs an existing login session | **aside-cli** |
 | Multi-step web flow with judgment (find value, then act on it) | **aside-cli** |
 | Public page, no auth, just need the HTML | `curl` |
-| Precise click on a native macOS app UI | Computer Use |
+| Precise click on a native OS app UI | Computer Use |
 | Need to see what the screen actually shows right now | Computer Use screenshot |
 
 Pair them freely: `aside exec` to do the flow, Computer Use to verify the result
@@ -115,10 +119,13 @@ Per account under `~/.aside/u/<id>/`:
 
 `~/.aside/logs/daemon-YYYY-MM-DD.log` holds daemon activity — useful when a flow
 fails silently. Browser profile data lives separately under
-`~/Library/Application Support/Aside/`.
+`$HOME/Library/Application Support/Aside/` on macOS and
+`%LOCALAPPDATA%\Aside\User Data` on Windows.
 
 **`models.json` can contain a plaintext API key.** Never paste its raw contents
-into a transcript or commit it. Redact before sharing and keep mode `600`.
+into a transcript or commit it. Redact before sharing. On macOS keep mode `600`.
+On Windows restrict the NTFS ACL to the file owner; do not build a security
+principal from `$env:USERNAME`.
 
 Editing `models.json` or `settings.json` while Aside is running risks being
 overwritten. Quit the app first, edit, then relaunch and re-verify.

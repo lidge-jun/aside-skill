@@ -46,6 +46,10 @@ detaches them instead of closing.
 The full global list is `page`, `tabs`, `fs`, `path`, `Buffer`, `sleep`, `display`,
 `pwd`, `fetch`, plus the tab and snapshot helpers and the service globals below.
 `pwd` is a string, not a function.
+On Windows `pwd` is a backslash path, and the session directory is date-prefixed
+`<YYYY-MM-DD>_<id>` (measured `2026-09-11_UjG8v8ehj3KUOslU`). The id the CLI prints
+and the directory name differ. Each `aside repl` call creates a new session
+directory, so relative artifacts do not survive across invocations.
 
 ## Page
 
@@ -131,7 +135,8 @@ await cua.doubleClick({ x, y, keypress });
 await cua.drag({ path: [{x,y}, {x,y}], keys });
 await cua.move({ x, y, keys });
 await cua.scroll({ x, y, scrollX, scrollY, keypress });
-await cua.keypress({ keys: ['Meta','a'] });    // joined with '+'
+await cua.keypress({ keys: ['Meta','a'] });    // macOS Command-A; joined with '+'
+await cua.keypress({ keys: ['Control','a'] }); // Windows Control-A
 await cua.type({ text });
 const png = await cua.getVisibleScreenshot();  // base64
 ```
@@ -161,11 +166,15 @@ Anything else throws immediately:
 
 ```
 Path escapes Project and session roots: /etc/passwd
+Path escapes Project and session roots: C:\Windows\System32\drivers\etc\hosts
 ```
 
 **This throw is a feature.** Unlike `exec` under `guard`, which denies and moves
 on, the repl fs raises an error you cannot miss. When you only need to read or write
 a file, repl is the safer surface.
+
+The CLI still exits 0 on a `ReferenceError` and on a root escape. Do not read the
+process exit code. Parse the trailing `[error | Nms]` or `[ok | Nms]` marker.
 
 ## Other globals
 
@@ -267,7 +276,7 @@ console.log({ filename: download.suggestedFilename(), path: p, size: (await fs.s
 ```
 
 `download.saveAs('./artifacts/name.ext')` only when you actually need an artifacts
-copy. Note that `fs` cannot browse the real `~/Downloads`; a registered download is
+copy. Note that `fs` cannot browse the OS downloads folder; a registered download is
 readable through `download.path()` and nowhere else. In a one-shot
 `aside repl "..."` verify the file in the same command, because the session closes
 with the process.
