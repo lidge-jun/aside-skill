@@ -48,13 +48,18 @@ if (Test-Path -LiteralPath $dest) {
   $src = @(Get-ChildItem -Recurse -File -LiteralPath $srcRoot | ForEach-Object { $_.FullName.Substring($srcRoot.Length) } | Sort-Object)
   $dst = @(Get-ChildItem -Recurse -File -LiteralPath $dstRoot | ForEach-Object { $_.FullName.Substring($dstRoot.Length) } | Sort-Object)
   Check ('deploy: same file set (' + $src.Count + ' files)') ((Compare-Object $src $dst | Measure-Object).Count -eq 0) 'file sets differ'
+  # .NET directly: Get-FileHash lives in Microsoft.PowerShell.Utility and is not
+  # always autoloaded in a restricted host, which made this check fail under the
+  # receipt runner while passing in an interactive shell.
   $bad = 0
+  $sha = [System.Security.Cryptography.SHA256]::Create()
   foreach ($rel in $src) {
     if (-not (Test-Path -LiteralPath ($dstRoot + $rel))) { $bad++; continue }
-    $h1 = (Get-FileHash -LiteralPath ($srcRoot + $rel) -Algorithm SHA256).Hash
-    $h2 = (Get-FileHash -LiteralPath ($dstRoot + $rel) -Algorithm SHA256).Hash
+    $h1 = [BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($srcRoot + $rel)))
+    $h2 = [BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($dstRoot + $rel)))
     if ($h1 -ne $h2) { $bad++ }
   }
+  $sha.Dispose()
   Check 'deploy: every file matches by SHA256' ($bad -eq 0) ('mismatched files ' + $bad)
 } else {
   Check 'deploy: aside-jun is installed in the Codex skills directory' $false ('not found at ' + $dest)
