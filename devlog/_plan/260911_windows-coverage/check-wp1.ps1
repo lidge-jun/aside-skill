@@ -2,11 +2,12 @@
 # ASCII only on purpose: a BOM-less .ps1 containing non-ASCII is parsed as the
 # ANSI code page by Windows PowerShell 5.1 (002 D6). Korean match text lives in
 # check-wp1.patterns.tsv, which this script reads as UTF-8.
-# Run from the aside-skill repo root:
+# Runnable from any working directory: all paths resolve from $PSScriptRoot.
 #   powershell.exe -NoProfile -File devlog/_plan/260911_windows-coverage/check-wp1.ps1
 
 $ErrorActionPreference = 'Stop'
-$unit = 'devlog/_plan/260911_windows-coverage'
+$unit = $PSScriptRoot
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 $fail = 0
 
 function Check([string]$name, [bool]$ok, [string]$detail) {
@@ -79,22 +80,24 @@ $targets = @('aside-jun/SKILL.md','aside-jun/references/permissions.md','aside-j
              'aside-jun/references/repl-api.md','aside-jun/references/deep-research.md',
              'aside-jun/references/refskill-aside.md','aside-jun/scripts/refresh-builtin-summary.sh',
              'aside-jun/agents/openai.yaml','README.md')
-foreach ($t in $targets) { Check ('target exists: ' + $t) (Test-Path -LiteralPath $t) 'not found' }
+foreach ($t in $targets) {
+  Check ('target exists: ' + $t) (Test-Path -LiteralPath (Join-Path $repo $t)) 'not found'
+}
 $syncTargets = @('install.sh','sync.sh','autosync.sh','install-autosync.sh','hub-setup.sh',
                  'bin/aside-memory-merge','templates/gitattributes','templates/gitignore',
                  'repos.conf.example','README.md','AGENT.md')
 foreach ($t in $syncTargets) {
-  $p = Join-Path '../aside-memory-sync' $t
+  $p = Join-Path (Join-Path $repo '../aside-memory-sync') $t
   Check ('target exists: aside-memory-sync/' + $t) (Test-Path -LiteralPath $p) 'not found'
 }
 
 # 6. the baseline the 468-line budget is computed from
-$lines = (Get-Content -LiteralPath 'aside-jun/SKILL.md').Count
+$lines = (Get-Content -LiteralPath (Join-Path $repo 'aside-jun/SKILL.md')).Count
 Check 'SKILL.md baseline is 499 lines' ($lines -eq 499) ('actual ' + $lines)
 
 # 7. wp1 is docs-only: the two host files are wp2's job
 foreach ($h in @('aside-jun/references/host-macos.md','aside-jun/references/host-windows.md')) {
-  Check ('wp2 target not yet created: ' + $h) (-not (Test-Path -LiteralPath $h)) 'already exists'
+  Check ('wp2 target not yet created: ' + $h) (-not (Test-Path -LiteralPath (Join-Path $repo $h))) 'already exists'
 }
 
 # 8. this script must stay ASCII-only, by bytes
