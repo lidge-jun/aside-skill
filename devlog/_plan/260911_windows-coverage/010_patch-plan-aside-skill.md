@@ -47,7 +47,12 @@ macOS에서는 지금까지 문제가 없었지만, 같은 문장을 두 플랫�
 
 ## 작업 패키지
 
-### WP0 - 진입점: 플랫폼 판정과 CLI 해석 (신규, SKILL.md 상단)
+### WP0 - 진입점: 플랫폼 판정과 CLI 해석 (내용 정의)
+
+**배치를 먼저 못 박는다.** 이 WP 는 *내용* 을 정의하고, 그 내용이 사는 곳은
+`host-windows.md` (WP2) 와 `host-macos.md` (WP3) 다. `SKILL.md` 에는 약 24줄짜리
+**선택 블록만** 들어간다. 아래 네 칸의 스니펫은 SKILL.md 로 가지 않는다.
+D2 의 468줄 예산과 D1 의 "SKILL.md 를 비운다" 는 그래야 동시에 성립한다.
 
 모든 명령보다 먼저 오는 블록이다. **설치 직후부터 `aside` 가 이름으로 안 잡히는 Windows 결함**
 (000 §2)을 여기서 흡수한다. 사용자 조작 결과가 아니라 설치관리자가 junction print name을
@@ -120,8 +125,35 @@ $aside = "$HOME/.local/bin/aside"
    - 기각 근거표는 유지: System32 `timeout` 은 sleep, Cygwin `perl` 은 종료코드 3584.
 3. **argv.** 프롬프트 앞에 `--` 를 넣는다. 인라인 산문은 argv 재구성으로 깨진다
    (실측 `unknown option '-TotalCount'`). `-ArgumentList` 는 배열이며 `; ` 로 조인하지 않는다.
-3. **락.** `Global\AsideJob-<job>` 명명 뮤텍스. abandoned mutex가 `shlock` 의 스테일 회수를 대체한다.
-4. **셸 도구.** 이름은 `bash`, 실체는 PowerShell. bash 문법을 넣으면 조용히 실패한다.
+
+   두 셸의 **복사해서 쓸 수 있는 완성 레시피**를 여기에 싣는다. 규칙만 적고 코드를 안 주면
+   구현자가 `000_research.md` 의 옛 스니펫을 복사한다.
+
+   ```powershell
+   # Windows / PowerShell (5.1 과 7 공통)
+   $out = Join-Path $env:TEMP 'aside-out.txt'
+   $err = Join-Path $env:TEMP 'aside-err.txt'
+   $p = Start-Process -FilePath $aside -PassThru -NoNewWindow `
+        -RedirectStandardOutput $out -RedirectStandardError $err `
+        -ArgumentList @('exec','--permission','full-access','--',$prompt)
+   if (-not $p.WaitForExit(300000)) {
+     & "$env:SystemRoot\System32\taskkill.exe" /PID $p.Id /T /F | Out-Null
+     exit 142
+   }
+   exit $p.ExitCode
+   ```
+
+   `--` 가 없으면 프롬프트의 선행 대시 토큰이 CLI 옵션으로 먹힌다.
+   리다이렉트가 없으면 `.StandardOutput` 은 빈 문자열이다. `$LASTEXITCODE` 는 읽지 않는다.
+
+   ```bash
+   # Windows / Git Bash
+   /usr/bin/timeout --kill-after=5 300 "$ASIDE" exec --permission full-access -- "$PROMPT"
+   rc=$?; [ $rc -eq 124 ] || [ $rc -eq 137 ] && rc=142
+   exit $rc
+   ```
+4. **락.** `Global\AsideJob-<job>` 명명 뮤텍스. abandoned mutex가 `shlock` 의 스테일 회수를 대체한다.
+5. **셸 도구.** 이름은 `bash`, 실체는 PowerShell. bash 문법을 넣으면 조용히 실패한다.
    **guard에서는 무한 교착**이므로 `bash` 를 쓸 계획이면 `--permission full-access` 가 필수.
    full-access에서 cwd는 `C:\Users\super\.aside\u\0\`.
 5. **경로.** 계정 루트 `%USERPROFILE%\.aside\u\0`, 프로필 `%LOCALAPPDATA%\Aside\User Data`,
@@ -168,8 +200,11 @@ macOS 에 pwsh 가 없으면 그 칸은 문서상 계약이며 프리미티브�
   트리거 N분 반복, 로그온 시에만 실행,
   **이미 실행 중이면 새 인스턴스 시작 안 함**(네이티브 락), `aside.exe` 절대경로.
   동작 줄은 **두 개를 나란히** 적는다.
-  `pwsh.exe -NoProfile -File <run.ps1>` 와
-  `"C:\Program Files\Git\bin\bash.exe" --noprofile --norc <run.sh> --quiet`.
+  `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -File <run.ps1>` 와
+  `<로케이터가 찾은 bash.exe 절대경로> --noprofile --norc <run.sh> --quiet`.
+  **맨 `pwsh.exe` 를 쓰지 않는다.** schtasks 의 기본 PATH 에는 PowerShell 7 이 없고
+  `WindowsPowerShell\v1.0` 만 있다. 그래서 잡 스크립트는 5.1 에서 도는 문법으로 쓴다(D6).
+  bash 쪽도 `Program Files\Git` 을 하드코딩하지 않고 020 WP6 로케이터가 찾은 경로를 쓴다.
   어느 쪽도 fallback 이 아니다.
 - 잡 스크립트 예제를 두 벌로 병기한다. `.ps1` 은 뮤텍스 + `WaitForExit` + `taskkill /T /F`,
   `.sh` 는 `/usr/bin/timeout` + mkdir 락 + 124/137 → 142 재사상.
@@ -205,6 +240,7 @@ Windows에만 있는 건 없다. `scripts/refresh-builtin-summary.sh` 는 계정
 
 ### WP9 - README.md (중)
 
+저장소 루트의 `aside-skill/README.md` 다 (`aside-jun/` 아래가 아니다).
 요구사항 절(L147-158)의 "macOS가 유일한 플랫폼", "Mach-O CLI만 배포", "macOS 27.0 arm64" 폐기.
 양 플랫폼 요구사항과 설치 경로. Windows 설치는 `curl | bash` 가 아니라 **Settings > Developers**
 (공식 components 체인지로그 1.26.907.1712에 명시). 스킬 설치 명령 `cp -R` 옆에 `Copy-Item -Recurse` 병기.
@@ -225,13 +261,18 @@ host-windows.md / host-macos.md를 먼저 채우는 이유는, SKILL.md에서 �
 
 ## 인수 조건
 
-1. `rg -n "macOS-only|Mach-O|perl -e 'alarm" aside-jun/SKILL.md` → 0건.
-2. `rg -n '~/\.aside/u/0/' aside-jun/SKILL.md` → 프롬프트 절 안에는 0건.
+1. `rg -n "macOS-only|perl -e 'alarm" aside-jun/SKILL.md` → 0건.
+   `Mach-O` 는 제외한다. WP1 이 "macOS 는 Mach-O, Windows 는 PE" 라는 **사실 문장**을 쓰므로
+   그 단어 자체를 금지하면 WP1 과 AC1 이 서로를 배제한다.
+2. `rg -n '~/\.aside/u/0/' aside-jun/SKILL.md` → 0건.
+   프롬프트 절뿐 아니라 파일 전체에서 0건으로 간다. 문서 안에서만 예외를 두면 검사할 수 없다.
 3. `wc -l aside-jun/SKILL.md` < 500.
 4. `aside-jun/references/host-windows.md` 와 `host-macos.md` 존재.
-5. 실행 가능한 모든 스니펫에 **OS와 셸이 둘 다** 라벨로 붙어 있고, 각 OS 파일 안에
-   bash 와 PowerShell 이 모두 존재한다. 어느 쪽도 fallback 이라고 적혀 있지 않다.
-6. Windows 실기에서 host-windows.md의 CLI 해석 스니펫이 `1.26.906.1630` 을 찍는다.
+5. `references/host-*.md` 와 `references/scheduling.md` 안의 실행 가능한 모든 스니펫에
+   **OS와 셸이 둘 다** 라벨로 붙어 있고, 두 OS 파일 각각에 bash 와 PowerShell 이 모두 존재한다.
+   어느 쪽도 fallback 이라고 적혀 있지 않다. (SKILL.md 는 D1 이후 레시피를 갖지 않으므로 대상이 아니다.)
+6. Windows 실기에서 host-windows.md의 CLI 해석 스니펫이 `--version` 을 성공적으로 출력한다.
+   특정 버전 문자열로 고정하지 않는다. `030` 1항의 `aside update` 를 돌리면 값이 움직인다.
 7. `bash` 도구 서술이 플랫폼별로 분기돼 있고, Windows 쪽에 guard 교착 경고와
    full-access 요구가 들어 있다.
 8. macOS 회귀 없음 — `perl alarm`/`shlock`/LaunchAgent 절이 host-macos.md에 온전히 보존.
@@ -239,3 +280,5 @@ host-windows.md / host-macos.md를 먼저 채우는 이유는, SKILL.md에서 �
    Git Bash 칸의 GNU timeout 은 `/usr/bin/timeout` 절대 경로다.
 10. host-windows.md 의 데드라인 레시피가 `powershell.exe` 5.1 에서 파싱/실행된다.
     `Kill($true)` 가 등장하지 않고, `Start-Process` 뒤에서 `$LASTEXITCODE` 를 읽지 않는다.
+11. 스케줄러 액션의 인터프리터가 **절대 경로**다. 맨 `pwsh.exe` 는 등장하지 않는다
+    (schtasks 의 기본 PATH 에 PowerShell 7 이 없다).

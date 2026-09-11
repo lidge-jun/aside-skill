@@ -19,7 +19,7 @@ OS로만 나누면 Windows에서 실제로 도는 Git Bash 5.3.15가 2등 시민
 | | bash | PowerShell |
 |---|---|---|
 | macOS | `/usr/bin/perl` alarm + `shlock` + LaunchAgent | 같은 OS 바이너리를 `&`/`Start-Process`로 호출 |
-| Windows | Git Bash `/usr/bin/timeout` + mkdir 락 + schtasks 액션이 `bash.exe` | `Start-Process` 데드라인 + 명명 뮤텍스 + schtasks 액션이 `pwsh -File` |
+| Windows | Git Bash `/usr/bin/timeout` + mkdir 락 + schtasks 액션이 `bash.exe --noprofile --norc` | `Start-Process` 데드라인 + 명명 뮤텍스 + schtasks 액션이 `System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -File` |
 
 SKILL.md에는 선택 블록만 남긴다. "OS 파일 하나만 읽어라. 그 파일은 bash와 PowerShell을
 둘 다 1급으로 적는다. 예시를 맞추려고 셸을 번역하지 마라."
@@ -41,7 +41,7 @@ GNU timeout의 124/137은 bash 래퍼 안에서 142로 재사상한다. 공개 �
 | OS | 셸 | 프리미티브 | 데드라인 판별 |
 |---|---|---|---|
 | macOS | bash | `/usr/bin/perl -e 'alarm shift; exec @ARGV'` | SIGALRM -> 142 |
-| macOS | PowerShell | `Start-Process -PassThru` + `WaitForExit(ms)` | 반환값 false -> kill -> 142 |
+| macOS | PowerShell | `Start-Process -PassThru` + `WaitForExit(ms)` | 반환값 false -> `$p.Kill()` -> 142. `taskkill` 은 Windows 전용이라 여기서 쓰지 않는다 |
 | Windows | Git Bash | **`/usr/bin/timeout` 절대 경로만** | 124/137 -> 142로 재사상 |
 | Windows | PowerShell | `Start-Process -PassThru` + `WaitForExit(ms)` | 반환값 false -> `taskkill /T /F` -> 142 |
 
@@ -83,7 +83,9 @@ PATH 순서에 따라 System32의 `timeout.exe`(명령을 감싸지 않는 **sle
 - 배포하는 `.ps1`은 ASCII 전용으로 한다. 비ASCII가 들어가면 UTF-8 **BOM**이 필수다.
   BOM 없는 `.ps1`을 5.1이 CP949로 파싱한다. (`bom-less-ps1-cp949`)
 - 보안 주체를 `$env:USERNAME`으로 만들지 않는다. 토큰 SID를 쓴다.
-- `command -v` 대신 `Get-Command`.
+- `command -v` 대신 `Get-Command`. **단 `bash` 는 예외다.** `Get-Command bash` 는
+  WindowsApps 의 0바이트 스텁을 집는다. bash 는 D4 로케이터로만 찾는다.
+- 스케줄러 액션의 인터프리터는 절대 경로로 적는다. schtasks 의 기본 PATH 에 pwsh 7 은 없다.
 
 ## D4 - aside-memory-sync: `.sh`가 유일한 구현, `.ps1`은 1급 진입점 (채택)
 

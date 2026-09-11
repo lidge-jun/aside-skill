@@ -10,7 +10,7 @@
 > `.ps1` 항목은 "두 번째 오케스트레이터를 만들지 않는다" 로 한정된다.
 > WP2-3 의 머지 드라이버 근거도 코퍼스 #57 로 교체됐다 (CreateProcess 가 아니라 `sh`).
 
-## 전략 결정: Git Bash 단일 코드베이스 + 얇은 Windows 심 (안 A)
+## 전략 결정: `.sh` 단일 구현 + 1급 PowerShell 진입점 (안 A)
 
 두 안을 놓고 골랐다.
 
@@ -145,7 +145,13 @@ launchd의 대응물이 그것이고(사용자 모드, 주기, 재부팅 생존,
 `MINGW*|MSYS*|CYGWIN*` 분기를 추가하고:
 
 - 트리거: 1회 + N분 간격 무한 반복
-- 동작: `"C:\Program Files\Git\bin\bash.exe" -lc "<autosync.sh 경로> --quiet"`
+- 동작: **argv 벡터 하나로 고정한다.** WP6 로케이터가 찾은 `bash.exe` 절대경로 +
+  `--noprofile` + `--norc` + `<autosync.sh 경로>` + `--quiet`.
+  `-lc "<경로> --quiet"` 형태는 쓰지 않는다. 로그인 셸 `-c` 문자열이라 WP6 이 막으려는
+  PATH 오염과 따옴표 문제가 그대로 돌아오고, 경로에 공백이 있으면 깨진다.
+  `Program Files\Git` 하드코딩도 하지 않는다.
+- 잡이 `git`/`ssh` 를 PATH 에서 찾아야 하므로 **태스크 환경을 명시한다.**
+  launchd 쪽이 `install-autosync.sh:69` 에서 PATH 를 박아주는 것과 같은 역할이다.
 - 로그온 시에만 실행 (`LogonType Interactive`)
 - 우선순위 8~10 (launchd `Nice 10` / `LowPriorityIO` 대응)
 - **이미 실행 중이면 새 인스턴스 시작 안 함** — 네이티브 락
@@ -225,10 +231,17 @@ WP5(문서)가 마지막인 이유는 WP6 의 진입점 이름이 확정돼야 R
 2. `git config merge.aside.driver` 의 token 0 이 실제 인터프리터 경로이고, 경로가 **정슬래시**이며
    양쪽이 따옴표로 감싸여 있고 `%O %A %B %P` 는 따옴표 없이 남아 있다. `WindowsApps` 경로가 아니다.
 3. macOS에서 고친 `MEMORY.md` 와 Windows에서 고친 같은 파일이 충돌 마커 없이 병합된다.
-   **판정은 git 의 exit code 가 아니라 병합 결과 파일 내용으로 한다** — 드라이버가 실행조차
-   못 했을 때 git 은 그것을 평범한 충돌로 보고하기 때문이다 (코퍼스 #57).
+   **판정은 git 의 exit code 도, "충돌 마커가 없다" 도 아니다.** 둘 다 드라이버가 실행조차
+   못 한 경우를 통과시킨다. 코퍼스 #57 의 실패 A/B 는 `exit 1` 에 작업트리가 `ours` 그대로였고,
+   거기에도 `<<<<<<<` 는 없었다.
+   오라클은 **결과 파일이 양쪽의 고유 문자열을 모두 담고 있고 어느 부모와도 같지 않다** 이다.
+   픽스처는 같은 줄을 양쪽에서 다르게 고친 것으로 잡고, 분류가 `other` 라 드라이버 없이는
+   반드시 깨지는 `TAXONOMY.md` 를 쓴다. `MEMORY.md` 의 서로 다른 절 수정은 드라이버 없이도
+   기본 병합이 통과하므로 오라클로 쓸 수 없다.
+   **일회용 클론에서 돌린다.** 실사용 저장소 `C:\Users\super\.aside\u\0\memory` 를 픽스처로 쓰지 않는다.
 4. 병합 결과 파일이 LF다.
-5. `schtasks /Query /TN AsideAutosync` 가 등록을 보여주고, `--remove` 로 사라진다.
+5. `schtasks /Query /TN <일회용 이름>` 이 등록을 보여주고, `--remove` 로 사라진다.
+   검증에는 일회용 태스크 이름을 쓰고, 사용자가 실제로 돌리는 `AsideAutosync` 를 건드리지 않는다.
 6. macOS 쪽 동작은 회귀 없음 — launchd 분기와 `.sh` 문법은 손대지 않는다.
 7. `.\install.ps1` 과 `./install.sh` 가 같은 `install.sh` 에 도달한다. README 가 두 줄을 나란히 보여준다.
    로케이터가 `Get-Command bash` 를 쓰지 않는다.

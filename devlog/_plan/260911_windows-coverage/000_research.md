@@ -129,17 +129,26 @@ Windows 실측 결과 대체가 필요하다.
 채택안 실측: 2000ms 데드라인에 30초 프로세스를 걸었더니 2.099초에 종료됐고
 타임아웃 여부가 `WaitForExit` 반환값으로 분리된다.
 
-> **정정 (002 참조).** 아래 스니펫의 `$p.Kill($true)` 는 pwsh 7 전용이다.
-> Windows PowerShell 5.1의 `Process.Kill` 은 인자 0개짜리 하나뿐이라
-> `Kill(bool)` 자체가 없다 (5.1.26100.8655 / CLR 4.0.30319 실측).
-> 배포 문서에 싣는 트리 kill 은 `taskkill /PID $p.Id /T /F` 로 간다.
+> **정정 (002 참조).** 이 절의 첫 초안은 `$p.Kill($true)` 를 썼고 프롬프트를 인라인 인자로 넘겼다.
+> 둘 다 틀렸다. `Kill(bool)` 은 pwsh 7 전용이고 Windows PowerShell 5.1 의 `Process.Kill` 은
+> 인자 0개짜리 하나뿐이며 (5.1.26100.8655 / CLR 4.0.30319 실측), 프롬프트를 인라인으로 넘기면
+> argv 재구성으로 CLI 가 산문을 플래그로 읽는다. 아래가 정정된 형태다.
 
 ```powershell
-$p = Start-Process -FilePath $aside -ArgumentList @('exec','--permission','full-access',$prompt) `
-                   -NoNewWindow -PassThru
-if (-not $p.WaitForExit(300000)) { $p.Kill($true); exit 142 }
+$out = Join-Path $env:TEMP 'aside-out.txt'
+$err = Join-Path $env:TEMP 'aside-err.txt'
+$p = Start-Process -FilePath $aside -PassThru -NoNewWindow `
+     -RedirectStandardOutput $out -RedirectStandardError $err `
+     -ArgumentList @('exec','--permission','full-access','--',$prompt)
+if (-not $p.WaitForExit(300000)) {
+  & "$env:SystemRoot\System32\taskkill.exe" /PID $p.Id /T /F | Out-Null
+  exit 142
+}
 exit $p.ExitCode
 ```
+
+`--` 가 프롬프트 앞에 있어야 선행 대시 토큰이 CLI 옵션으로 먹히지 않는다.
+리다이렉트가 없으면 `.StandardOutput` 은 비어 있다. `$LASTEXITCODE` 는 읽지 않는다.
 
 142를 "데드라인 발화" 센티넬로 유지하면 기존 macOS 문서와 종료코드 계약이 맞춰진다.
 락은 `shlock` 대신 명명 뮤텍스 `Global\AsideJob-<job>` 를 쓴다. 프로세스가 죽으면
