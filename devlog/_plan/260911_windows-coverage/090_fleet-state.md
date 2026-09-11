@@ -15,14 +15,23 @@ userId = a291c31e-f7a3-4f57-a143-627c85cab7e6
 
 | 기기 | 로그인 | 슬롯 | 메모리 | kim_wiki | 도구 클론 | autosync |
 |---|---|---|---|---:|---|---|
-| macbookpro2 (100.107.184.60) | `jun` | **u/0** | git, main, 119커밋, 클린 | 243커밋, 클린 | `e7b39a2` (구버전) | `com.aside.autosync` |
-| macmini (100.76.170.81) | `junny` | **u/1** | git, main, 119커밋, 클린 | 243커밋, 클린 | `e7b39a2` (구버전) | `com.aside.autosync` |
-| jun-macbookpro (100.82.193.126) | `jun` (예정) | UNKNOWN | UNKNOWN | UNKNOWN | 없음 | 없음 |
-| **이 Windows** (mini) | `super` | **u/0** | git 아님 (합류 전) | 없음 | `fbfb08d` (최신) | 없음 |
+| macbookpro2 (100.107.184.60) | `jun` | **u/0** | git, main, 클린 | 243커밋, 클린 | `74c7b24` | `com.aside.autosync` |
+| macmini (100.76.170.81) | `junny` | **u/1** | git, main, 클린 | 243커밋, 클린 | `74c7b24` | `com.aside.autosync` |
+| jun-macbookpro (100.82.193.126) | `jun` | **u/1** | git, main, 클린 | 243커밋 | `74c7b24` | `com.aside.autosync` |
+| **이 Windows** (MINI) | `super` | **u/0** | git, main, 클린 | 243커밋 | `74c7b24` | `AsideAutosync` (작업 스케줄러) |
 
-macmini 는 슬롯이 7개(u/0~u/6)고 그중 **u/1 만** 저장소다. u/0 은 md 5개짜리 미끼다.
-macbookpro2 는 슬롯 3개에 u/0 이 저장소다. Windows 는 u/0 하나뿐이고
-`.moss-cache/memory-a291c31e-.../` 이름으로 같은 계정임이 확인된다.
+> 2026-09-12 갱신. 처음 이 표를 쓸 때 jun-macbookpro 는 UNKNOWN 이었는데, 접근 경로를
+> 뚫고 보니 **이미 함대 구성원**이었다. 자세한 건 `140_wp5-evidence.md`.
+
+슬롯 번호는 정말로 제각각이다.
+
+- macmini: 슬롯 7개(u/0~u/6), 그중 **u/1 만** 저장소. u/0 은 md 5개짜리 미끼다.
+- macbookpro2: 슬롯 3개, u/0 이 저장소.
+- jun-macbookpro: u/0 은 memory 디렉터리 자체가 없고, u/1 이 저장소,
+  **u/2 는 아예 다른 계정**(`deb87045-e4bd-41e3-9c36-619dd7489b32`)의 스텁이다.
+- Windows: u/0 하나뿐.
+
+번호로 짝을 맞췄으면 jun-macbookpro 에서 남의 계정 스텁을 허브에 붙일 뻔했다.
 
 ## 허브
 
