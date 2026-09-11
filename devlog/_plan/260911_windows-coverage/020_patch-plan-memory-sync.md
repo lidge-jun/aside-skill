@@ -52,15 +52,28 @@ PowerShell 진입점은 편의 기능이 아니라 1급 진입점이며, WP6 이
 3. `templates/gitattributes` 에 `*.md text eol=lf` 추가(현재 `* text=auto eol=lf` 는 유지).
 4. `install.sh` 가 메모리 저장소에 `git config core.autocrlf false` 를 박도록 추가.
 
-검증 (C): Windows 체크아웃에서 `git ls-files --eol` 이 전부 `i/lf w/lf`.
-메모리 저장소에서 `git config core.autocrlf` → `false`.
+검증 (C): `git ls-files --eol` 의 **인덱스 열**이 전부 `i/lf` 다.
+`w/` 열은 보지 않는다. 이미 체크아웃된 트리에서는 renormalize 를 해도, `git checkout -- .` 를 해도,
+`git reset --hard` 를 해도 worktree 는 `w/crlf` 로 남는다 (실측). `w/lf` 는 그 커밋을 **새로 클론**해야 나온다.
+`w/lf` 를 게이트로 잡으면 정상 상태에서 영원히 실패한다.
+또 하나 실측: 이 저장소의 13개 파일은 이미 `i/lf` 라서 renormalize 가 블롭을 바꾸지 않는다.
+`git status --porcelain` 은 `A  .gitattributes` 하나만 보여준다. 그래서 renormalize 를 별도 커밋으로
+분리할 이유가 없다. 메모리 저장소 쪽에서는 `git config core.autocrlf` → `false`.
 
 ## WP2 - install.sh: Git Bash에서도 죽는 3곳
 
 ### 2-1. `hostname -s` (install.sh:116,117,129 / sync.sh:38 / autosync.sh:99)
 
-MSYS `hostname` 에는 `-s` 가 없다(`unknown option -- s`). `install.sh` 는 `set -e` 라
-여기서 **설치가 중단**된다. 이 호스트에는 전역 `user.email` 도 없어서 반드시 이 분기를 탄다.
+MSYS `hostname` 에는 `-s` 가 없다(`unknown option -- s`). 이 호스트에는 전역 `user.email` 이
+없어서 반드시 이 분기를 탄다.
+
+**실패 모양을 정정한다.** `set -e` 는 `HOST=$(hostname -s)` 같은 *대입* 은 중단시키지만,
+`install.sh:116-117` 과 `:129` 처럼 `git config`/`git commit` 의 **argv 안에 있는 명령 치환**은
+중단시키지 않는다. 실측 결과 설치는 계속 진행되고 대신 값이 빈다:
+email 이 `aside-memory@`, name 이 `super@`, 커밋 제목이 `aside memory:  초기 스냅샷` 이 된다.
+즉 이건 중단이 아니라 **조용한 identity 오염**이고, 그래서 더 나쁘다.
+수정도 `HOST=$(hostname); HOST=${HOST%%.*}` 형태여야 한다. `HOST=$(hostname -s)` 로 쓰면
+그 대입이 `set -e` 를 건드려 진짜로 중단된다.
 
 수정: `HOST=$(hostname); HOST=${HOST%%.*}` 공용 함수로 3개 파일 통일.
 
@@ -235,7 +248,9 @@ WP5(문서)가 마지막인 이유는 WP6 의 진입점 이름이 확정돼야 R
 
 ## 인수 조건
 
-1. Windows Git Bash에서 `install.sh` 가 끝까지 통과한다 (현재는 `hostname -s` 에서 중단).
+1. Windows Git Bash에서 `install.sh` 가 끝까지 통과하고, **git identity 가 비어 있지 않다.**
+   현재 증상은 중단이 아니라 `aside-memory@` / `super@` 같은 빈 호스트명이다.
+   따라서 판정은 "끝까지 돌았다" 가 아니라 `git config user.email` 이 `@` 로 끝나지 않는 것이다.
 2. `git config merge.aside.driver` 의 token 0 이 실제 인터프리터 경로이고, 경로가 **정슬래시**이며
    양쪽이 따옴표로 감싸여 있고 `%O %A %B %P` 는 따옴표 없이 남아 있다. `WindowsApps` 경로가 아니다.
 3. 양쪽에서 같은 줄을 다르게 고친 `TAXONOMY.md` 가 구조 인식 병합을 거친다.
