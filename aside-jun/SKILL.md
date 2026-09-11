@@ -412,6 +412,10 @@ inside the account root. Anything outside the roots throws
 `Path escapes Project and session roots: <path>` immediately rather than suspending,
 which is the opposite of the exec file tools.
 
+That directory starts **empty**, so `fs.writeFile` into `./tmp/` or `./artifacts/`
+throws `ENOENT` until you `fs.mkdir(path, { recursive: true })`. Only
+`page.screenshot({ path })` and `page.pdf({ path })` make their own parent.
+
 Full surface, including the tab-inspection protocol, the reading-escalation ladder,
 download handling, and the service globals:
 [references/repl-api.md](references/repl-api.md).

@@ -89,11 +89,30 @@ Actions: `click`, `fill`, `selectOption`, `check`, `uncheck`, `setChecked`,
 `blur`, `tap`, `scrollIntoViewIfNeeded`, `setInputFiles`, `dragTo`,
 `dispatchEvent`.
 
-Reads and chaining: `evaluate`, `evaluateAll`, `boundingBox`, `screenshot`,
+Reads and chaining: `evaluate`, `evaluateAll`, `boundingBox`,
 `count`, `all`, `first`, `last`, `nth`, `locator`, `filter({hasText})`,
 `getAttribute`, `isChecked`, `isDisabled`, `isEditable`, `isEnabled`, `isHidden`,
 `isVisible`, `inputValue`, `innerHTML`, `innerText`, `textContent`,
 `elementHandle`, `waitFor({state, timeout})`.
+
+`locator.screenshot()` is missing from that list on purpose: it is broken. The daemon
+rejects the call before it reaches the page.
+
+```js
+await p.locator('h1').screenshot({ type: 'png' });   // Error: Invalid parameters
+```
+
+Clip the page instead. Measured on CLI `1.26.906.1630`: the workaround returns a real
+PNG (`137,80,78,71` signature, 241 bytes for an 864x32 heading) where the direct call
+throws.
+
+```js
+const box = await p.locator('h1').boundingBox();
+const png = await p.screenshot({ type: 'png', clip: box });
+```
+
+`page.screenshot()`, `annotatedScreenshot()` and `cua.getVisibleScreenshot()` are
+unaffected. Reported upstream as aside-skill issue #1, still open.
 
 `waitFor` states are exactly `attached`, `detached`, `visible`, `hidden`. Default
 timeout 3000ms.
@@ -161,6 +180,25 @@ A path is accepted only if it resolves inside `cwd`, the account root, or the
 session storage dir. Registered downloads are readable but never writable.
 Relative paths beginning `artifacts`, `attachments`, or `tmp` resolve against the
 session dir; others resolve against `cwd`.
+
+**Those session subdirectories do not exist yet.** A session starts with an empty
+directory - `readdir(pwd)` right after `openTab` returns `[]` - and `fs` does not
+create parents, so the first write throws:
+
+```
+ENOENT: no such file or directory, open '...\sessions\<id>\tmp\probe.txt'
+```
+
+`mkdir` first, which the download recipe below already does:
+
+```js
+await fs.mkdir('./artifacts', { recursive: true });
+```
+
+Two calls are measured exceptions and create their own parent: `page.screenshot({ path })`
+and `page.pdf({ path })`. Everything else, including `fs.writeFile`, needs the `mkdir`.
+`download.saveAs` has not been measured - treat it as needing one. Reported upstream as
+aside-skill issue #2, still open.
 
 Anything else throws immediately:
 
