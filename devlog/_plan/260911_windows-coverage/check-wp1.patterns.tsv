@@ -1,0 +1,6 @@
+# name<TAB>regex - retired instructions that must not survive in the plan documents.
+# UTF-8. check-wp1.ps1 reads this file so the script itself can stay ASCII-only.
+# Avoid backslashes here: they do not survive the patch round-trip cleanly.
+login-shell -lc scheduled action	bash.exe" -lc
+MEMORY.md as the merge fixture	MEMORY.md . 를 서로 다르게 고친
+no-conflict-markers as the merge oracle	충돌 마커 없이 병합된다
