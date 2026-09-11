@@ -64,3 +64,21 @@ PDF_PATH=ok entries=["tmp2"]
 ```
 
 `download.saveAs` 는 측정하지 않았다. 그래서 예외 목록에 넣지 않았다.
+
+## 경로 형태는 원인이 아니다
+
+감사가 "저자는 절대 POSIX 경로로 실패했는데 너는 상대 경로로 성공했다" 고 짚어서 확인했다.
+
+```
+AFTER_OPENTAB=[]
+ABS_PATHSHOT=ok          (path = <pwd>/tmp/abs.png)
+ENTRIES=["tmp"]
+ABS_FILE_BYTES=13733
+REL_FILE_BYTES=13733
+```
+
+Windows 에서는 절대 경로도 부모를 만든다. 그리고 디렉터리만 생긴 게 아니라
+파일이 실제로 떨어진다 (13733바이트). 경로 형태 가설은 여기서 죽었다.
+남는 차이는 플랫폼 또는 버전이며, mac 은 재측정하지 않았다.
+
+데몬 버전: `1.26.910.1749`, platform `win` (win-x64 manifest.json).
