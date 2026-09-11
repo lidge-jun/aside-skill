@@ -23,12 +23,15 @@ exit 0 fail-fast, 도구 카탈로그, `session`/`memory`/`host` 명령 — 은 
 
 ```
 SKILL.md                      플랫폼 중립 계약 + "호스트 레이어는 아래 둘 중 하나를 읽어라"
-references/host-macos.md      perl alarm / shlock / cron·LaunchAgent / Seatbelt / Apple Passwords
-references/host-windows.md    Start-Process 데드라인 / 명명 뮤텍스 / Task Scheduler / junction / pwsh
+references/host-macos.md      Darwin 프리미티브(perl alarm / shlock / LaunchAgent / Seatbelt /
+                              Apple Passwords)를 bash 와 PowerShell 양쪽 호출로 수록
+references/host-windows.md    Windows 프리미티브(junction / 데드라인 / 명명 뮤텍스 /
+                              Task Scheduler / AppContainer)를 bash 와 PowerShell 양쪽 호출로 수록
 ```
 
 지금 SKILL.md에서 macOS 호스트 세부(perl alarm 표, shlock, cron/LaunchAgent 문단,
-Seatbelt 문단)를 빼내면 **줄이 줄어든다.** 그 자리에 6~8줄짜리 플랫폼 판정 블록을 넣는다.
+Seatbelt 문단)를 빼내면 **줄이 줄어든다.** 그 자리에 약 24줄짜리 선택 블록을 넣는다
+(빼는 55줄, 넣는 24줄, 499 → 468. 상세는 `002` §D2).
 500줄 제약을 늘리지 않고 커버리지가 두 배가 된다.
 
 ### 결정 3. `--permission full-access` 기본 유지. Windows에서는 근거가 하나 더 늘었다
@@ -49,22 +52,6 @@ macOS에서는 지금까지 문제가 없었지만, 같은 문장을 두 플랫�
 모든 명령보다 먼저 오는 블록이다. **설치 직후부터 `aside` 가 이름으로 안 잡히는 Windows 결함**
 (000 §2)을 여기서 흡수한다. 사용자 조작 결과가 아니라 설치관리자가 junction print name을
 `\??\C:\...` 로 써서 생기는 문제이므로, 스킬이 첫 단계에서 항상 해소하고 들어가야 한다.
-
-```powershell
-# Windows
-$aside = Join-Path $env:LOCALAPPDATA 'Aside\CLI\current\aside.exe'
-if (-not (Test-Path -LiteralPath $aside)) {
-  $aside = Get-ChildItem "$env:LOCALAPPDATA\Aside\CLI\versions\*\aside.exe" |
-           Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
-}
-& $aside --version
-```
-
-```bash
-# macOS - 비로그인 셸(SSH 등)은 ~/.local/bin 이 PATH에 없다
-ASIDE="${ASIDE:-$HOME/.local/bin/aside}"
-"$ASIDE" --version
-```
 
 네 칸을 모두 싣는다. 어느 쪽도 fallback 이라고 적지 않는다.
 
@@ -155,6 +142,11 @@ $aside = "$HOME/.local/bin/aside"
 SKILL.md와 scheduling.md에서 빼낸 macOS 호스트 레이어를 그대로 옮긴다.
 `perl -e 'alarm shift; exec @ARGV'`, exit 142 근거표, `shlock`, cron/LaunchAgent, Seatbelt.
 
+bash 칸만 옮기면 D1 위반이다. 같은 프리미티브를 PowerShell 에서 부르는 칸을 나란히 적는다.
+데드라인은 `Start-Process -PassThru` + `WaitForExit(ms)` + `exit 142`,
+락은 `shlock` 을 `&` 로 호출, LaunchAgent 의 `ProgramArguments` 는 `pwsh -File` 도 가능하다.
+macOS 에 pwsh 가 없으면 그 칸은 문서상 계약이며 프리미티브는 동일하다고 명시한다.
+
 이관하면서 한 문장만 고친다. "macOS에는 `timeout` 이 없다"는 **기본 시스템 기준**임을 명시한다.
 실측 기계는 Homebrew coreutils가 깔려 로그인 PATH에서 `timeout`/`gtimeout` 이 잡힌다.
 `flock` 은 brew를 켜도 없다. `perl` 을 고르는 근거(어디서나 있고 종료코드가 구분된다)는 그대로 유효하다.
@@ -173,9 +165,14 @@ SKILL.md와 scheduling.md에서 빼낸 macOS 호스트 레이어를 그대로 �
 ### WP5 - references/scheduling.md (대)
 
 - cron/LaunchAgent 절을 macOS 절로 명시하고, Windows Task Scheduler 절을 신규.
-  트리거 N분 반복, 동작 `pwsh.exe -NoProfile -File <run.ps1>`, 로그온 시에만 실행,
+  트리거 N분 반복, 로그온 시에만 실행,
   **이미 실행 중이면 새 인스턴스 시작 안 함**(네이티브 락), `aside.exe` 절대경로.
-- 잡 스크립트 예제를 `.ps1` 로 병기: 뮤텍스 + `WaitForExit` + 트리 kill.
+  동작 줄은 **두 개를 나란히** 적는다.
+  `pwsh.exe -NoProfile -File <run.ps1>` 와
+  `"C:\Program Files\Git\bin\bash.exe" --noprofile --norc <run.sh> --quiet`.
+  어느 쪽도 fallback 이 아니다.
+- 잡 스크립트 예제를 두 벌로 병기한다. `.ps1` 은 뮤텍스 + `WaitForExit` + `taskkill /T /F`,
+  `.sh` 는 `/usr/bin/timeout` + mkdir 락 + 124/137 → 142 재사상.
 - `/Users/<you>/.aside/cli/bin/aside` 경로 폐기. 이 경로는 macOS에도 **없다**
   (실측: `~/.aside/cli` 에 `bin/` 없음, PATH는 `~/.local/bin/aside` 심볼릭).
 - 세션 만료 관련 내용은 OS 무관이므로 유지.
@@ -194,7 +191,8 @@ SKILL.md와 scheduling.md에서 빼낸 macOS 호스트 레이어를 그대로 �
 헤더에 `/Users/jun/...` 가 박혀 있다. 플랫폼 열을 추가해 재생성한다.
 실측 차이: macOS에만 `apple-passwords`, `imessage`, `site-specific`.
 Windows에만 있는 건 없다. `scripts/refresh-builtin-summary.sh` 는 계정 루트를 인자로 받게 두고
-`.ps1` 쌍을 추가하거나 "Git Bash에서 실행" 을 명시한다.
+`.ps1` 쌍을 **추가한다**. "Git Bash에서 실행하라" 로 끝내면 PowerShell 이 2등이 된다.
+`.ps1` 은 020 WP6 과 같은 로케이터 규약을 따르는 얇은 진입점이다.
 
 ### WP8 - 소규모
 

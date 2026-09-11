@@ -118,8 +118,10 @@ PY_WIN=$(cygpath -m "$PY" 2>/dev/null || printf '%s' "$PY")
 git config merge.aside.driver "\"$PY_WIN\" \"$DRIVER_WIN\" %O %A %B %P"
 ```
 
-첫 토큰은 진짜 `python.exe`여야 한다. `.cmd`는 CreateProcess가 직접 못 띄우고,
-확장자 없는 셔뱅 스크립트는 Store 스텁으로 간다.
+첫 토큰은 **실제 인터프리터 경로**여야 한다. 확장자 없는 셔뱅 스크립트를 그대로 두면
+`python3` 가 PATH 에서 Store 스텁으로 해석된다. `python.exe` 와 Aside 동봉 `python3.cmd` 는
+둘 다 쓸 수 있다 (아래 정정 참조). `WindowsApps` 경로만 거부한다.
+`$PY` 와 `$DRIVER` 는 **둘 다** `cygpath -m` 을 거친다. sh 는 두 토큰 모두의 백슬래시를 먹는다.
 
 숨은 위험이 하나 있었다. `~/.aside/runtime/bin/python3.cmd`는 `PYTHONHOME`과 `VIRTUAL_ENV`를
 세팅한 뒤에 `python.exe`를 부른다. 그 래퍼를 건너뛰고 맨 `python.exe`를 등록하면 표준 라이브러리를

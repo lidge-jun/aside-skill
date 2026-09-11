@@ -24,7 +24,8 @@
 Windows 실기의 Git Bash 5.3.15는 배열, `[[ ]]`, 프로세스 치환, `trap RETURN/EXIT`,
 `mktemp -d`, GNU `find -newermt`, mkdir 락까지 이미 다 돌린다. 실패는 다섯 군데에 몰려 있다.
 `sync.sh`/`autosync.sh`/`hub-setup.sh` 를 PowerShell로 복제하면 앞으로 머지 정책을 바꿀 때마다
-두 번 고쳐야 하는데, 얻는 것은 `bash.exe` 경유를 안 써도 된다는 편의뿐이다.
+두 번 고쳐야 한다. 그래서 **구현**은 한 벌로 둔다. 다만 호출 경로까지 한 벌로 두지는 않는다.
+PowerShell 진입점은 편의 기능이 아니라 1급 진입점이며, WP6 이 그것을 정의한다.
 
 단, 안 A는 "Git Bash만 깔면 된다"가 아니다. **Git Bash 안에서도 여전히 깨지는 것**이 있고
 그게 실제 블로커다. 아래 WP1~WP3이 그 부분이다.
@@ -106,10 +107,13 @@ git의 정의이므로, 실행조차 못 한 드라이버와 실행 후 충돌�
 
 ```bash
 DRIVER_WIN=$(cygpath -m "$DRIVER" 2>/dev/null || printf '%s' "$DRIVER")
-git config merge.aside.driver "\"$PY\" \"$DRIVER_WIN\" %O %A %B %P"
+PY_WIN=$(cygpath -m "$PY" 2>/dev/null || printf '%s' "$PY")
+git config merge.aside.driver "\"$PY_WIN\" \"$DRIVER_WIN\" %O %A %B %P"
 ```
 
 인터프리터 접두사와 따옴표가 둘 다 필수다. `Program Files` 나 공백 있는 사용자명에서 즉시 깨진다.
+`$PY` 도 반드시 `cygpath -m` 을 거친다. sh 가 삼키는 것은 드라이버 경로만이 아니라 **두 토큰 모두**다.
+`$PY` 가 `C:\Users\...\python.exe` 형태로 들어오면 같은 이스케이프 버그로 죽는다.
 `%O %A %B %P` 는 git이 임시 경로를 넣으므로 따옴표 없이 둔다. 전체를 `bash -c` 로 감싸면 안 된다.
 `chmod +x` (install.sh:98) 의존은 버린다. NTFS + `core.filemode=false` 에서 실행 비트는 남지 않고,
 인터프리터를 명시하면 애초에 필요 없다.
@@ -155,7 +159,9 @@ launchd의 대응물이 그것이고(사용자 모드, 주기, 재부팅 생존,
 
 - `README.md`: Windows 요구사항 절 신규. Git for Windows(Git Bash), 실제 CPython 3.8+ 또는
   Aside 동봉 런타임, Task Scheduler. `./sync.sh` 는 어느 OS에서도 메모리 저장소에 복사되지 않으므로
-  `bash <경로>/sync.sh` 호출을 명시. `/tmp/ours` (README:227)는 `$(mktemp)` 로.
+  저장소 경로로 호출해야 한다는 점을 명시하되, **두 줄을 나란히** 적는다.
+  `bash <경로>/sync.sh` 와 `<경로>\sync.ps1`. 어느 쪽도 fallback 이라고 적지 않는다.
+  `/tmp/ours` (README:227)는 `$(mktemp)` 로.
 - `repos.conf.example`: 슬롯이 `u/1` 로 박혀 있는데 이 호스트는 `u/0` 이다. 경로에 역슬래시 금지 명시.
 - `templates/gitignore`: `Thumbs.db`, `desktop.ini`, `ehthumbs.db` 추가.
 - `AGENT.md`: 충돌 확인 예시에 `git diff --diff-filter=U` / `Get-Content` 병기.

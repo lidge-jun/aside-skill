@@ -51,8 +51,8 @@ A는 어디서 시작해도 된다.
 
 ## 최종 인수 조건
 
-A: `010_patch-plan-aside-skill.md` 인수 조건 8항.
-B: `020_patch-plan-memory-sync.md` 인수 조건 6항.
+A: `010_patch-plan-aside-skill.md` 인수 조건 10항.
+B: `020_patch-plan-memory-sync.md` 인수 조건 8항.
 
 공통: macOS 회귀 없음. A는 `host-macos.md` 로 기존 내용을 온전히 이관하고,
 B는 `.sh` 문법과 launchd 분기를 건드리지 않는다.
