@@ -30,7 +30,12 @@ Windows 에서 `ubuntu@clisu-oracle` 은 Tailscale SSH 로 이미 붙는다.
    (`MEMORY.md`, `USER.md`, `TAXONOMY.md`, `episodic/2026-09-10.md`, `episodic/2026-09-11.md`)
 3. `git init -b main`, `core.autocrlf false`, `remote add hub`, `fetch`
 4. `git checkout -B main hub/main`
-5. `install.sh` 를 명시 경로로 실행 (드라이버/템플릿만, 첫 커밋 경로는 타지 않음)
+5. `install.sh` 를 **반드시 명시 경로로** 실행. 인자 없이 돌리면 `find` 가 살아있는
+   `u/0/memory` 를 유일 후보로 잡아 거기에 `git init` + 첫 커밋을 만든다. 그게 바로
+   우리가 피하려는 Windows 루트다.
+   **정정:** 명시 경로를 줘도 첫 커밋을 건너뛰지 않는다 (`install.sh:148-157` 에 skip 이 없다).
+   체크아웃 뒤에 돌리면 워크트리가 허브와 같으므로 커밋할 변경이 없어 조용히 지나가지만,
+   그건 "스킵" 이 아니라 "차이가 없어서" 다. 실행 후 `git log` 로 새 루트가 없는지 확인한다.
 6. hold 의 Windows 고유 episodic 을 **후손 커밋으로 합집합**. 덮어쓰지 않는다.
 
 gitignore 대상(`.history.jsonl`, `.moss-cache/`, `memory-index.json`, `.dream-state.json`)은
@@ -64,6 +69,9 @@ status 에 스텁 L1 파일 없음, 드라이버 등록 형태, `core.autocrlf=f
 
 ## 사람이 필요한 두 지점
 
+> **해소됨 (사용자 승인).** 1번은 "그냥 죽여도 된다, 재시작해도 됨" 으로 승인받았다.
+> 2번의 사용자명은 `jun` 으로 확정됐다. 아래 내용은 근거 기록으로 남긴다.
+
 ### 1. Aside 데몬 정지 (D2)
 
 합류는 데몬이 열고 있는 디렉터리의 추적 파일을 바꾼다. hold 창 동안 데몬이 스텁을
@@ -85,5 +93,29 @@ status 에 스텁 L1 파일 없음, 드라이버 등록 형태, `core.autocrlf=f
 
 ## 데몬과 무관해서 지금 해도 되는 것
 
-백업, `~/.ssh/config` 항목 추가, 도구 클론, python/드라이버 확인,
-그리고 **kim_wiki 클론** 은 메모리 디렉터리를 건드리지 않으므로 데몬 정지 없이 가능하다.
+**정정 (wp1 감사).** 이 문단은 뭉뚱그려 썼고 두 군데가 틀렸다.
+
+- 백업은 메모리 디렉터리를 **읽는다.** "건드리지 않는다" 는 과장이고, 데몬이 떠 있으면
+  `.history.jsonl` 이나 `.moss-cache` 가 찢어진 채로 복사될 수 있다. gitignore 대상이라
+  허브 합류에는 무해하지만, 이 백업이 체크아웃의 롤백 원본이므로 공짜는 아니다.
+- `install.sh` 는 **인자 없이 돌리면 위험하다.** 위 5번 참조.
+
+백업은 `cp -a` 로 뜨되 Git Bash 에서 실행한다. PowerShell 의 `cp` 는 `Copy-Item` 이고
+아카이브 모드가 아니다. 백업 위치는 `u/0` **밖**의 형제 경로로 둔다.
+
+## 드라이버 증명의 올바른 단언 (wp1 감사)
+
+`020` 에 적었던 "`TAXONOMY.md` 가 충돌 마커 없이 병합된다" 는 **틀렸다.**
+`aside-memory-merge` 의 `classify` 는 L1 을 `MEMORY.md`/`USER.md` 로만 본다.
+`TAXONOMY.md` 는 `other` 로 분류되고 핸들러가 없어서, 드라이버가 **정상 동작해도**
+같은 줄 충돌이면 마커를 남긴다. 마커 유무로는 아무것도 증명되지 않는다.
+
+드라이버가 실제로 돌았다는 증거는 **충돌 라벨**이다. 드라이버는
+`ours (this machine)` / `theirs (other machine)` 라벨을 쓴다 (`aside-memory-merge:43-44`).
+기본 병합은 `HEAD` 라벨을 쓴다. 라벨이 유일한 식별자다.
+
+증명 절차: 도구를 먼저 클론하고, `mktemp -d` 로 만든 일회용 저장소에
+`TAXONOMY.md` 를 복사한 뒤 `install.sh <일회용경로>` 로 드라이버를 등록한다.
+`git check-attr merge -- TAXONOMY.md` 가 `merge: aside` 여야 하고,
+같은 줄을 서로 다르게 고친 두 브랜치를 `git merge` 한 결과에 양쪽 고유 문자열과
+`ours (this machine)` 라벨이 함께 있어야 한다.
