@@ -22,6 +22,16 @@ FULL_BYTES=13733
 `137,80,78,71,13,10,26,10` 은 PNG 시그니처다. 864x32 짜리 거의 흰 띠라서 241바이트가 나온다.
 같은 세션의 전체 페이지 스크린샷은 13733바이트다.
 
+영향받지 않는 스크린샷 경로도 같이 찍었다. 감사가 "그건 측정 안 했다" 고 지적해서 확인한 것이다.
+
+```
+ANNOTATED=ok type=Object
+CUA=ok len=18312
+```
+
+`annotatedScreenshot()` 과 `cua.getVisibleScreenshot()` 은 던지지 않는다.
+깨지는 것은 `locator` 경유 호출뿐이다.
+
 첫 확인 때 매직 넘버가 `184,131,24,172` 로 나왔는데 그건 Aside 문제가 아니라
 `new Uint8Array(b.buffer)` 로 읽어서 Node Buffer 풀의 오프셋 0 을 본 내 실수였다.
 `b[0]` 으로 직접 읽으면 정상이다.
