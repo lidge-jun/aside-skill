@@ -101,11 +101,11 @@ $aside = "$HOME/.local/bin/aside"
 | L13 "Aside is macOS-only: the CLI is a `Mach-O` binary" | 교체. 양 플랫폼 지원, CLI는 macOS Mach-O / Windows PE. 로컬 실행에 GUI 앱 필요는 양쪽 공통 유지 |
 | L16 "base-system `perl -e 'alarm ...'` and `shlock`" | 호스트 레이어 참조로 교체 |
 | L54-57 Seatbelt 문단 | **삭제 후 이관.** macOS는 host-macos.md, Windows는 host-windows.md. Windows는 거부 문구가 없고 교착한다는 사실이 정반대라 한 문장으로 못 합친다 |
-| L64-65, 88-89, 247-253, 302, 435 `perl alarm` 레시피 6곳 | 플랫폼 중립 문장 + 호스트 레이어 참조. "모든 exec는 호스트 데드라인 아래에서 돈다"는 규범만 SKILL.md에 남긴다 |
-| L30, 73, 139, 238-240, 248-251, 264, 330 등 write fence `~/.aside/u/0/` | **절대경로화.** 결정 4 |
+| L64-66, 88-90, 247-254, 302, 435-443 `perl alarm` 레시피 6곳 | 플랫폼 중립 문장 + 호스트 레이어 참조. "모든 exec는 호스트 데드라인 아래에서 돈다"는 규범만 SKILL.md에 남긴다 |
+| L30, 73, 238-240, 248-251, 264, 330 등 write fence `~/.aside/u/0/` | **절대경로화.** 결정 4. (L139 는 write fence 가 아니라 `settings.json` 경로 언급이며 같은 치환 대상이다) |
 | L92-109 perl alarm 근거 표 | host-macos.md로 이관 |
 | L20, 172, 276-277 Touch ID / Apple Passwords 6자리 | "생체/패스키/볼트 PIN 제스처"로 중립화, 구체는 credentials.md |
-| L332-337 cron·LaunchAgent | "스케줄러에 넣기 전 확인할 것" 규범만 남기고 구체는 scheduling.md |
+| L335-338 cron·LaunchAgent | "스케줄러에 넣기 전 확인할 것" 규범만 남기고 구체는 scheduling.md |
 | L425 iMessage 언급 | macOS 한정 표시. Windows 빌트인에 없다 |
 | L498 `~/.aside/u/0/models.json 와 accounts.json` | `accounts.json` 은 `u/0` 이 아니라 데이터 루트에 있다. 양 플랫폼 공통 오류 |
 | 신규 | exit code는 성공 신호가 아니다 (001 §3). stdout에서 `is blocked by policy` 를 찾고 산출물을 직접 존재 확인한다 |

@@ -12,7 +12,7 @@
 | 저장소 | `aside-skill` | `aside-memory-sync` |
 | 성격 | 문서 - 에이전트가 읽는 지침 | 코드 - bash + python + 스케줄러 |
 | 전략 | 호스트 레이어를 **OS 파일**로 추출하고, 각 OS 파일 안에 bash/PowerShell 을 둘 다 1급으로 수록 | `.sh` 단일 구현 유지 + 얇은 PowerShell **진입점**을 1급으로 추가 |
-| 크기 | 문서 9개, SKILL.md 499 → 약 468줄 | 수정 7개 + `.gitattributes` 및 `.ps1` 6개 신규 |
+| 크기 | 수정 10개 + 신규 2개(host-macos/host-windows), SKILL.md 499 → 약 468줄 | 수정 10개 + 신규 7개(`.gitattributes` + `.ps1` 6개) |
 | 위험 | 조용히 틀린 지침이 그대로 굳는 것 | 줄바꿈 오염으로 메모리 파일이 깨지는 것 |
 
 ## 작업 순서 (work-phase)
