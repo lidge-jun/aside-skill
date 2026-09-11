@@ -55,5 +55,21 @@ A는 어디서 시작해도 된다.
 A: `010_patch-plan-aside-skill.md` 인수 조건 11항.
 B: `020_patch-plan-memory-sync.md` 인수 조건 8항.
 
+## 출고 기록 (2026-09-11)
+
+| 저장소 | 범위 | 확인 |
+|---|---|---|
+| aside-skill | `8a732bf..fd05d52` → `origin/main` | `git ls-remote origin main` = `fd05d52` |
+| aside-memory-sync | `8033c70..57cc7df` → `origin/main` | push 보고 `main -> main` |
+
+검증은 `check-wp1.ps1` / `check-wp2.ps1` / `check-wp3.ps1` 로 했고 전부 exit 0 이다.
+세 스크립트 모두 ASCII 전용이며 `powershell.exe` 5.1 에서 돈다.
+
+푸시 직전 감사가 잡은 마지막 버그는 `bin/aside-memory-merge` 의 LF 쓰기였다.
+`Path.write_text(..., newline="\n")` 는 3.10+ 인데 `install.sh` 는 3.8 을 받는다.
+3.8/3.9 에서 병합할 때마다 TypeError 가 났을 것이다. `Path.open()` 형태로 고쳐서 출고했다.
+
+남은 것: `aside update` 후 재검증(030 착수 전 확인 1항), Remote Control 계약(양쪽 호스트 disabled 라 DEFER).
+
 공통: macOS 회귀 없음. A는 `host-macos.md` 로 기존 내용을 온전히 이관하고,
 B는 `.sh` 문법과 launchd 분기를 건드리지 않는다.
