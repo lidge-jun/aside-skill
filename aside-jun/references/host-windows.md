@@ -8,6 +8,71 @@ bash와 PowerShell은 둘 다 1급이다. 예시를 맞추려고 셸을 번역�
 
 ## CLI 해석과 junction 결함
 
+## 앱은 끌 수는 있어도 켤 수는 없다
+
+에이전트 컨텍스트에서 `Aside.exe` 를 띄우면 즉시 `0xC000027B` 로 죽는다.
+`Start-Process` 도, stdio 리다이렉트를 떼도, `cmd /c start` 로 분리해도 같다.
+Chromium 기반이라 진짜 대화형 데스크톱 세션이 필요한데 에이전트가 띄운 프로세스는
+그 세션에 있지 않다. 종료는 `taskkill /PID <id> /T /F` 로 잘 된다. 그래서 아무 생각 없이
+내리면 사용자가 직접 아이콘을 눌러야 하는 상태로 남는다.
+
+**일회용 스케줄 작업으로 우회한다.** `InteractiveToken` 이 사용자 세션을 물려준다.
+
+```powershell
+# XML 은 UTF-16 이어야 schtasks 가 받는다. Principal 이 핵심이다.
+#   <Principal id="Author"><LogonType>InteractiveToken</LogonType></Principal>
+#   <Actions Context="Author"><Exec><Command>C:\Program Files\Aside\Application\Aside.exe</Command></Exec></Actions>
+[IO.File]::WriteAllText($utf16Path, [IO.File]::ReadAllText($utf8Path), [Text.Encoding]::Unicode)
+schtasks.exe /Create /TN "AsideRelaunchOneShot" /XML $utf16Path /F
+schtasks.exe /Run    /TN "AsideRelaunchOneShot"
+schtasks.exe /Delete /TN "AsideRelaunchOneShot" /F   # 끝나면 지운다
+```
+
+```bash
+# Git Bash: schtasks 스위치가 /Create -> C:/Create 로 바뀌므로 변환을 꺼야 한다.
+MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' schtasks.exe /Run /TN "AsideRelaunchOneShot"
+```
+
+2026-09-12 확인: 이 방법으로 `Aside` 16개 + `aside-daemon` 1개가 정상 기동했다.
+
+## 빈 문자열 인자를 PowerShell 로 넘기지 마라
+
+`ssh-keygen -t ed25519 -N "" -f <경로>` 를 PowerShell 에서 돌리면 `-N` 에 빈 문자열이
+들어가지 않는다. 암호 없는 키를 만들려다 **암호가 걸린 키**가 만들어지고, 파일도 권한도
+멀쩡해 보여서 원인이 안 보인다.
+
+증상은 서버가 아니라 클라이언트에서 난다.
+
+```
+debug1: Server accepts key: ... ED25519 SHA256:...
+debug3: sign_and_send_pubkey: signing using ssh-ed25519 ...
+debug2: we did not send a packet, disable method     <- 서명 실패. 클라이언트 문제다
+```
+
+`Server accepts key` 다음에 `we did not send a packet` 이 오면 `authorized_keys` 나
+원격 권한을 뒤지지 마라. 개인키를 못 읽거나 못 푸는 것이다.
+
+```bash
+# Git Bash 에서 만든다. 인용이 예측 가능하다.
+ssh-keygen -t ed25519 -N '' -C 'super@MINI-to-<host>' -f /c/Users/super/.ssh/id_ed25519_<host>
+ssh-keygen -y -P '' -f /c/Users/super/.ssh/id_ed25519_<host>   # 즉시 답하면 암호 없음
+```
+
+## known_hosts 는 이름과 IP 를 따로 기억한다
+
+`ssh <name>` 이 되는데 `~/.ssh/config` 에 `HostName <IP>` 를 넣는 순간 깨질 수 있다.
+`known_hosts` 에 이름만 있고 IP 가 없으면 `Host key verification failed` 가 난다.
+Tailscale MagicDNS 이름으로 신뢰가 잡힌 호스트에서 자주 겪는다.
+
+IP 를 고정하고 싶으면 먼저 지문을 대조하고 등록해라. **신뢰 채널은 기존 구성원이다** —
+이미 그 호스트에 붙는 다른 기기의 `known_hosts` 와 같은 지문인지 확인한다.
+
+```powershell
+ssh-keyscan -t ed25519 <ip> | Set-Content -LiteralPath $scan -Encoding ascii
+ssh-keygen -lf $scan                       # 이 지문과
+ssh <다른기기> 'ssh-keygen -F <ip> -f ~/.ssh/known_hosts'   # 저 기기가 가진 것이 같은가
+```
+
 사용자 PATH에 `%LOCALAPPDATA%\Aside\CLI\current` 가 들어 있다.
 설치관리자가 만든 junction의 print name이 NT 네임스페이스 형식 `\??\C:\...` 이라
 디렉터리가 빈 것으로 보이고, 설치 직후 `aside` 는 이름으로 해석되지 않는다.
@@ -322,4 +387,3 @@ test -e "$claimed_file"
 # Windows / Git Bash — 액션 인터프리터
 "$BASH_EXE" --noprofile --norc "$RUN_SH" --quiet
 ```
-
