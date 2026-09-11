@@ -40,6 +40,26 @@ Check ('SKILL.md under 500 (actual ' + $n + ')') ($n -lt 500) ('actual ' + $n)
 $evi = Join-Path $PSScriptRoot 'evidence/probe-open-issues.md'
 Check 'probe evidence recorded' ((Test-Path -LiteralPath $evi) -and ((Get-Item -LiteralPath $evi).Length -gt 0)) 'missing or empty'
 
+# deployment: the Codex skills copy must match the repo copy file for file
+$dest = Join-Path $env:USERPROFILE '.codex\skills\aside-jun'
+if (Test-Path -LiteralPath $dest) {
+  $srcRoot = (Resolve-Path (Join-Path $repo 'aside-jun')).Path
+  $dstRoot = (Resolve-Path $dest).Path
+  $src = @(Get-ChildItem -Recurse -File -LiteralPath $srcRoot | ForEach-Object { $_.FullName.Substring($srcRoot.Length) } | Sort-Object)
+  $dst = @(Get-ChildItem -Recurse -File -LiteralPath $dstRoot | ForEach-Object { $_.FullName.Substring($dstRoot.Length) } | Sort-Object)
+  Check ('deploy: same file set (' + $src.Count + ' files)') ((Compare-Object $src $dst | Measure-Object).Count -eq 0) 'file sets differ'
+  $bad = 0
+  foreach ($rel in $src) {
+    if (-not (Test-Path -LiteralPath ($dstRoot + $rel))) { $bad++; continue }
+    $h1 = (Get-FileHash -LiteralPath ($srcRoot + $rel) -Algorithm SHA256).Hash
+    $h2 = (Get-FileHash -LiteralPath ($dstRoot + $rel) -Algorithm SHA256).Hash
+    if ($h1 -ne $h2) { $bad++ }
+  }
+  Check 'deploy: every file matches by SHA256' ($bad -eq 0) ('mismatched files ' + $bad)
+} else {
+  Check 'deploy: aside-jun is installed in the Codex skills directory' $false ('not found at ' + $dest)
+}
+
 $sb = [IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'check-wp5.ps1'))
 $sn = 0
 foreach ($b in $sb) { if ($b -gt 127) { $sn++ } }
