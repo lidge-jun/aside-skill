@@ -209,23 +209,29 @@ or [npm package page](https://www.npmjs.com/package/aside-codemode) only when th
 user separately authorizes setup. Do not add `--force` or change an account's
 configuration as a convenience fallback.
 
-## Development context selection (after issue #44 fix)
+## Context selection in the 0.9.1 source contract
 
-The fix on the codemode development branch adds explicit CLI `--account` and
-`--host`, plus immutable configuration `browseContext: {"account":"u1", "host":"local"}`
-for CLI or configured MCP servers. Inspect the installed source/help before using
-this: released 0.9.0 still has the limitation described above. No package release
-is implied by a dev merge, and MCP per-call inputs remain `code`/`timeoutMs`.
+The implementation merged in [codemode PR #48](https://github.com/lidge-jun/aside-codemode/pull/48)
+adds explicit CLI `--account` and `--host`, optional `browseContext` configuration,
+and **per-call MCP** `account`/`host` fields. Inspect the actual installed schema:
+0.9.0 installations still use the smaller schema described above. A source merge
+or version string is not proof that this caller has loaded the updated server.
 
-Use both selectors when identity matters. The execution envelope's `browseContext`
-reports requested values and their source, with `actualIdentity: "unverified"`.
-Under a tiny output budget the field can be null with `truncated:true`; do not
-infer an inherited identity from that loss. Verify actual browser state separately.
-Unknown or malformed execution flags now fail before guest execution.
+When the exposed schema supports it, a context-pinned MCP call is:
 
-Complete explicit contexts separate reusable cache/approval state. Missing or
-partial selectors cannot safely persist approvals or reuse cached browser data. Remote
-`captureMany`/`report.build` materialization is rejected with `EREMOTEARTIFACT`
-because no verified transfer is implemented; textual browser reads remain
-available. Local materialization requires explicit `host: "local"`; an inherited
-host is not assumed local.
+```json
+{"code":"return await browse.context();","account":"u1","host":"local","timeoutMs":30000}
+```
+
+Use both selectors when identity matters. `browserContext` reports requested
+account/host and whether each came from explicit input, config or inherited
+native defaults. It is a routing report, not proof of authenticated browser
+identity. `await browse.context()` exposes the same selection to guest code.
+Inspect real page/account state separately and preserve output-truncation signals.
+
+Do not use local artifact materialization for an unverified remote/inherited host;
+there is no verified transfer mechanism in this skill. Use explicit `host: "local"`
+for local capture/report output. Missing or partial identity cannot safely justify
+reusing cached authenticated data or persistent approval state. Additional default
+context and administrative-argument hardening is tracked alongside the source fix;
+check the installed behavior rather than assuming every 0.9.1 build contains it.

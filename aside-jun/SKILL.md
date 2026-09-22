@@ -72,8 +72,8 @@ nondefault account or remote host, use native Aside's explicit `--account` /
 `--host` route unless the installed codemode contract proves equivalent routing.
 Keep the same workload split on that native route: REPL for known mechanical
 steps, exec for judgment/login. Do not silently switch global defaults to make
-a recipe work. For an installed development build with the #44 fix, follow the
-[explicit context contract](references/codemode.md#development-context-selection-after-issue-44-fix);
+a recipe work. For an installed build with the #44 fix, follow the
+[explicit context contract](references/codemode.md#context-selection-in-the-091-source-contract);
 verify capability rather than assuming a dev merge upgraded the installed package.
 
 Read the host instructions when running Aside `exec` or resolving a missing CLI:
