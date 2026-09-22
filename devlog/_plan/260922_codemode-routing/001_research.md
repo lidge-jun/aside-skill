@@ -102,3 +102,14 @@ A browser-disabled configuration was activated with browse.exec on a public URL:
 EDISABLED, hostCallFailures:1, exit 1, before browser launch. Its error suggests a
 config-writing command, but that suggestion is not task authorization. The bridge
 must report the disabled capability without running --enable-browse automatically.
+
+## Authorized upstream issue
+
+During implementation the user explicitly authorized filing codemode improvement
+issues. Existing issues 1-42 were inspected for duplicates. Current 0.9.0 accepts
+`--host sample-host --account u99 --code 'return 1'` with ok:true/result:1 and
+exit0, although those selectors do not propagate to browse session spawning.
+Opened https://github.com/lidge-jun/aside-codemode/issues/44 with the browser-free
+reproduction, exact source revision, propagation anchors and requested acceptance
+checks. No wrong-account browser operation was performed. This authorization is
+for issue filing; it does not authorize changing/publishing either repository.

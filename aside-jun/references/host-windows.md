@@ -6,8 +6,6 @@ bash와 PowerShell은 둘 다 1급이다. 예시를 맞추려고 셸을 번역�
 근거는 `devlog/_plan/260911_windows-coverage/000_research.md`,
 `001_parity-ledger-windows.md`, `002_decisions-dual-shell.md` 다.
 
-## CLI 해석과 junction 결함
-
 ## 앱은 끌 수는 있어도 켤 수는 없다
 
 에이전트 컨텍스트에서 `Aside.exe` 를 띄우면 즉시 `0xC000027B` 로 죽는다.
@@ -73,7 +71,53 @@ ssh-keygen -lf $scan                       # 이 지문과
 ssh <다른기기> 'ssh-keygen -F <ip> -f ~/.ssh/known_hosts'   # 저 기기가 가진 것이 같은가
 ```
 
-사용자 PATH에 `%LOCALAPPDATA%\Aside\CLI\current` 가 들어 있다.
+## 현재 설치와 CLI 탐색
+
+공식 개발자 문서가 2026-09-22에 안내하는 Windows 경로는 서명된 PowerShell
+설치 프로그램이다. 아래 작업은 사용자가 CLI 설치나 업데이트를 요청한 경우에만 한다.
+이 호스트 문서를 읽었다는 사실만으로 설치, 업데이트, 인증서 변경이 승인되지는 않는다.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$installer = Join-Path $env:TEMP 'aside-install.ps1'
+$publisher = 'CN=AT YOUR SIDE INC, O=AT YOUR SIDE INC, L=San Francisco, S=California, C=US'
+Invoke-WebRequest -UseBasicParsing -Uri https://releases.aside.com/install.ps1 -OutFile $installer
+$signature = Get-AuthenticodeSignature -LiteralPath $installer
+if ($signature.Status -ne 'Valid' -or
+    $null -eq $signature.SignerCertificate -or
+    $signature.SignerCertificate.Subject -ne $publisher -or
+    $null -eq $signature.TimeStamperCertificate) {
+  throw "Aside CLI installer signature verification failed ($($signature.Status): $($signature.StatusMessage))."
+}
+& $installer
+```
+
+설치 프로그램은 사용자 `PATH`에 Aside를 추가한다. 설치 후에는 새 터미널을 열고 먼저
+이름으로 해석되는지 확인한다. 성공하면 그 경로를 이후 명령에 재사용한다.
+
+```powershell
+$asideCommand = Get-Command aside -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($null -ne $asideCommand) {
+  $aside = $asideCommand.Source
+  & $aside --version
+}
+```
+
+```bash
+# Windows / Git Bash, 새 셸에서
+ASIDE=$(command -v aside 2>/dev/null || true)
+[ -n "$ASIDE" ] && "$ASIDE" --version
+```
+
+`Get-Command aside` 또는 `command -v aside`가 실패할 때만 아래의 2026-09-11
+junction 관찰과 버전 디렉터리 fallback을 적용한다. 공식 설치 및 PATH 문서:
+[Use the CLI, MCP, and REPL](https://docs.aside.com/help/developers).
+
+## CLI 해석과 junction 결함 (2026-09-11 관찰)
+
+2026-09-11 측정 호스트에서는 사용자 PATH에
+`%LOCALAPPDATA%\Aside\CLI\current` 가 들어 있었다.
 설치관리자가 만든 junction의 print name이 NT 네임스페이스 형식 `\??\C:\...` 이라
 디렉터리가 빈 것으로 보이고, 설치 직후 `aside` 는 이름으로 해석되지 않는다.
 
@@ -89,27 +133,35 @@ PS> cmd /c dir /AL "...\Aside\CLI"
 09/10/2026  08:46 PM    <JUNCTION>   current [\??\C:\Users\super\AppData\Local\Aside\CLI\versions\1.26.906.1630]
 ```
 
-같은 대상에 `mklink /J` 로 손으로 만든 junction은 print name이 `[C:\...]` 이고 통과한다.
-000 §2 대조 실험. 사용자 조작 결과가 아니라 설치 직후 상태이므로, 모든 명령보다 먼저
-버전 경로로 해석한다.
+같은 대상에 `mklink /J` 로 손으로 만든 junction은 print name이 `[C:\...]` 이고 통과했다.
+000 §2 대조 실험. 이 기록은 당시 설치관리자 상태의 증거이며 현재 Windows 설치가 항상
+같이 깨진다는 뜻은 아니다. 새 터미널의 PATH 탐색이 실패한 경우에만 버전 경로로 우회한다.
 
 `aside version` (대시 없음)은 버전 명령이 아니라 에이전트 세션을 연다.
 `--version` 만 쓴다. 버전 문자열을 문서에 고정하지 않는다.
 
 ```powershell
 # Windows / PowerShell (5.1 과 7 공통)
-$aside = Join-Path $env:LOCALAPPDATA 'Aside\CLI\current\aside.exe'
-if (-not (Test-Path -LiteralPath $aside)) {
+$asideCommand = Get-Command aside -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($null -ne $asideCommand) {
+  $aside = $asideCommand.Source
+} else {
+  $aside = Join-Path $env:LOCALAPPDATA 'Aside\CLI\current\aside.exe'
+}
+if (-not (Test-Path -LiteralPath $aside -PathType Leaf)) {
   $aside = Get-ChildItem "$env:LOCALAPPDATA\Aside\CLI\versions\*\aside.exe" |
            Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
 }
+if (-not $aside) { throw 'Aside CLI was not found on PATH or under the version directories.' }
 & $aside --version
 ```
 
 ```bash
 # Windows / Git Bash
-ASIDE="$LOCALAPPDATA/Aside/CLI/current/aside.exe"
-[ -x "$ASIDE" ] || ASIDE=$(ls -1 "$LOCALAPPDATA"/Aside/CLI/versions/*/aside.exe | sort | tail -1)
+ASIDE=$(command -v aside 2>/dev/null || true)
+[ -n "$ASIDE" ] || ASIDE="$LOCALAPPDATA/Aside/CLI/current/aside.exe"
+[ -x "$ASIDE" ] || ASIDE=$(find "$LOCALAPPDATA/Aside/CLI/versions" -mindepth 2 -maxdepth 2 -name aside.exe -type f 2>/dev/null | sort | tail -1)
+[ -n "$ASIDE" ] || { echo 'Aside CLI was not found on PATH or under the version directories.' >&2; exit 1; }
 "$ASIDE" --version
 ```
 

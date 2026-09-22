@@ -38,6 +38,15 @@ That gap is the only reason to bring Aside into a research task.
 
 ## Who does what
 
+For 2+ independent known pages or queries in an Aside workflow, the external
+coding agent can invoke [aside-codemode directly](codemode.md). Inspect an
+unfamiliar page once before batching; keep login, current-tab selection and
+state-dependent actions on native Aside. Preserve every source URL, result error
+and completeness field. `browse.readText` is fetch-first, so it is not automatic
+proof of a signed-in rendered page. Public HTTP sources can stay on the host's
+reader unless the user selected Aside.
+
+
 Codex discovers and decides. Aside proves what needs cookies. exec handles anything
 that needs judgment or an account.
 

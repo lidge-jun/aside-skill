@@ -7,18 +7,20 @@ below were recovered from the daemon bundle.
 No `import`/`require`. Use `console.log()` to see values; a bare expression prints
 nothing. Execution timeout is 120 seconds.
 
-Check the CLI's own help before trusting remembered flags - `aside --help`,
-`aside exec --help`, `aside repl --help`. Run `aside repl` in a TTY when you want
-thinking and tool output to stream live; piped into a file it still works but you
-lose the live view. Because scope dies with the invocation, name variables freshly
-within a call rather than assuming a previous one is gone or present.
+Before use, read `aside guide repl` and current command help. Read a relevant
+builtin service skill with `aside skills list/show` before inventing a DOM flow.
+This reference contains signatures and observations recovered from older daemon
+builds; check [compatibility](compatibility.md) when current help disagrees.
 
-Aside's own guidance calls the repl "a persistent ES2023+ JavaScript environment"
-whose "top-level `const` and `let` bindings persist." Inside one invocation, yes.
-Between two `aside repl` commands, no: bindings, `page`, `tabs`, and every ref are
-gone, and a tab opened by the first call is closed before the second starts. Plan
-each command as a complete flow, or borrow a window tab with `attachBrowserTab`,
-which detaches rather than closes.
+Persistence belongs to submissions within one interactive REPL process. Separate
+one-shot `aside repl "..."` invocations use temporary sessions: bindings, refs and
+attached pages must not be assumed to survive. The 1.26.902 probe observed owned
+tabs closing on exit; borrow a window tab with `attachBrowserTab` when it must
+survive and verify the current build's behavior. Verify downloads in the same
+invocation. Files on disk and live JS bindings have different lifetimes.
+
+For multiple independent known pages, consider the direct
+[codemode route](codemode.md); its guest APIs differ from these REPL globals.
 
 ## Getting a page
 
@@ -30,8 +32,10 @@ const active = await attachActiveBrowserTab();
 await closeTab(p);                        // closes owned tabs, detaches borrowed ones
 ```
 
-The CLI's own repl help mentions `getTabs()`; it is `undefined` on 1.26.902, and
-`listBrowserTabs()` is the call.
+CLI 1.26.906.1630 help still mentions `getTabs()`, while `aside guide repl`
+documents `listBrowserTabs()`. The older 1.26.902 probe found `getTabs()` undefined.
+Use the documented `listBrowserTabs()` route; do not treat that old probe as proof
+of every newer build's globals.
 
 `page` is a getter for the active page and starts `null` in a fresh CLI repl.
 `tabs` lists session-attached pages. `openTab` waits up to 5 seconds for stability.

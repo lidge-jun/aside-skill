@@ -135,3 +135,27 @@ snippets. The native-role exception was approved; no further permission question
 is required for Sol design consultation in this task. Host goal remains blocked
 because its exposed API has no resume operation; explicit user continuation owns
 this work. Do not claim automatic Stop arming.
+
+### wp2 P revalidation
+
+Previous D direction: implement the locked caller/reference map and verify final
+snippets. Product baseline remains unchanged at e6177f9. Current source snapshot
+and MCP schema have not changed; the plan consumes 020/021. Sol consultant is
+reused for this same plan's narrow version/feature-path reflection; independent
+reviewer revalidates the same audited map before implementation. Main retains
+README/SKILL/exec and small existing-reference edits; workers have disjoint files.
+
+wp2 same-plan Sol reflection: ALIGNED PORT-01 through PORT-07, no gap. Added
+unit-local 022_verify.py per existing checker convention to extract the actual
+snippets and verify observable outputs, not match normative phrases. No runtime
+wrapper, package dependency or product surface is added.
+
+### wp2 implementation result
+
+Implemented the exact file map: concise entrypoint, direct caller codemode
+cookbook, visualizer/exec bridge, dated compatibility and surgical existing
+reference updates. README and UI metadata are synchronized. Main integrated the
+three disjoint Sol worker slices and corrected issues found by fresh-reader and
+independent review. Verification and limits are in 023_verification.md. The user
+also authorized codemode issue filing; reproduced unsupported selector acceptance
+and opened issue44 without browser/account actions.

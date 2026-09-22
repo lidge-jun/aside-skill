@@ -228,3 +228,16 @@ native capability or request/update setup only if user separately authorizes it.
 Ordinary bounded positive reads may run on an older verified compatible API with
 version and coverage limits disclosed. No automatic package update. C includes a
 simulated older/missing-metadata routing scenario, plus actual 0.9.0 fixture proof.
+
+### Unit-local verification artifact
+
+NEW devlog/_plan/260922_codemode-routing/022_verify.py is a standard-library
+validator of the delivered Markdown links and executable examples. It extracts
+named fenced snippets from codemode.md (local-batch, browser-discovery,
+browser-batch), executes local-batch against scratch files with explicit roots
+and browser disabled, and checks expected rows, metadata and read errors. Browser
+syntax/shape is validated with actions.check or syntax-only compilation, not a
+live account. CLI negatives assert actual EROOT, EGUESTIMPORT and EDISABLED.
+A --codemode-cli absolute path argument selects the known source runtime; it
+never installs or updates. A --static-only mode supports quick docs-only checks.
+This artifact belongs to the existing unit, not a new product test framework.
