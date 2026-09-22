@@ -1,13 +1,16 @@
 # Scheduled runs and continuity
 
 `aside exec` is an ordinary CLI process, so any scheduler can drive it. What needs
-care is state: CLI sessions expire quickly, and the run has to be safe to launch
-when nobody is watching.
+care is state: session retention varies by build, and the run must be safe to
+launch unattended. These recipes apply only to a requested scheduled task.
+See [compatibility](compatibility.md) and [exec](exec.md) for current boundaries.
+The historical scheduler examples below use full access and account 0; substitute
+the task-authorized permission mode, selected account/host and absolute paths.
+They do not authorize configuration changes or elevated access on their own.
 
 ## Put exec in the scheduler directly
 
-There is nothing to build on top of this. Aside has no job runner of its own worth
-wiring up, and there is no session to keep warm between ticks. A cron line or a
+For an explicitly requested OS-scheduled workflow, a cron line or a
 LaunchAgent that calls `aside exec` with a full prompt is the macOS design;
 Task Scheduler is the Windows design. Recipes are in those sections. The path
 to the CLI is `$HOME/.local/bin/aside` on macOS and `aside.exe` under
@@ -18,10 +21,10 @@ Each tick is a complete run that starts fresh, does the work, and exits. The onl
 things it needs from the outside are a deadline, a lock, and a prompt that cannot
 ask a question. Everything else it can rediscover.
 
-## Sessions expire after 15 minutes unless saved
+## Historical retention measurement (1.26.902)
 
-CLI-created sessions are ephemeral while `save-sessions` is off (the shipped
-default; this skill turns it on, below). The daemon hardcodes:
+The following was measured on 1.26.902; it is not a current retention SLA.
+CLI-created sessions were ephemeral with `save-sessions` off. That daemon used:
 
 ```js
 EPHEMERAL_SESSION_RETENTION_MS = 900 * 1e3   // 15 minutes
@@ -41,8 +44,8 @@ sends `ephemeral: true` at session creation, the app does not. Re-verified on
 1.26.902: the `9e5` constant and the `Session is pending purge` string are still in
 the daemon bundle.
 
-So `aside session resume <id>` works for a quick follow-up within the window and
-not for scheduling. The `--session` flag itself was removed in 1.26.902. Do not
+In that measurement `aside session resume <id>` was suitable for a quick
+follow-up, not durable scheduled state. The `--session` flag itself was removed in 1.26.902. Do not
 build a scheduled job around resuming yesterday's session.
 
 Inside that window the control verbs are worth knowing. `aside session resume <id> "<prompt>"`
@@ -71,13 +74,15 @@ TERMINAL_SESSION_STATUSES = ['idle', 'errored', 'interrupted', 'aborted']
 
 `suspended` is not in that list, so a hung session is refused on resume and still
 kept as a row. A count on `state.db` found nine of them, the oldest 14.4 hours past
-its `updated_at`, every one `ephemeral = 1`. Expect them to pile up and clear them
-yourself; see the parked-run section of the main skill.
+its `updated_at`, every one `ephemeral = 1`. Inspect current session status before concluding the same behavior persists.
+Do not delete session rows as routine cleanup; preserve user work.
 
 ## Keep CLI sessions on the chat list
 
-`aside settings save-sessions true` puts CLI runs on the Aside chat list. Set it once
-and leave it on; it is the default recommendation of this skill.
+`aside settings save-sessions true` puts CLI runs on the chat list. Change this
+setting only when persistence is requested or already authorized. The current
+public contract does not promise indefinite resumability. Check existing settings
+and preserve them during ordinary invocation.
 
 Measured on 1.26.902 (002_save-sessions-probe.md, S8):
 
@@ -102,11 +107,11 @@ Whether a parked approval can be answered from the Chats list is still open. On
 approval card could be produced (S8-Q4). The older
 suspended rows are purge-pending and refuse `resume` and `steer`.
 
-`aside session list` shows running, idle, interrupted, and aborted CLI sessions and
-hides suspended ones regardless of this setting, so the `state.db` query in SKILL.md
-stays the way to count parked runs.
+The older probe found suspended rows missing from `session list`. Current help
+says it includes unsaved sessions; do not infer the current visibility contract
+from the historical database observation alone.
 
-With `save-sessions` off, there is also nothing useful to stash in the account
+In the historical ephemeral configuration, there was nothing durable to stash in the account
 root on the session's behalf. A session lives in `state.db` under a daemon-managed
 id, not in a file you can save and reload, so writing a session handle into
 `~/.aside/u/0/` buys you a string that stops resolving fifteen minutes later.

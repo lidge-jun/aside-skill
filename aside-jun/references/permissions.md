@@ -2,7 +2,16 @@
 
 Background for the rules in SKILL.md. Read this when a rule seems overcautious, or
 when a run skipped a step or parked and you need to know whether a retry can help.
-Under `guard` it cannot; under `full-access` the step runs.
+Current invocation choices live in [exec.md](exec.md). Use only the task's
+already-authorized scope. Guard denial is not permission to switch tools or
+widen access. Full access can remove a file-tool restriction but cannot guarantee
+completion or grant authority. The mechanism and probe tables below are dated
+historical evidence; see [compatibility](compatibility.md).
+
+The code blocks below reproduce old probes. They are diagnostic records, not
+instructions to bypass a denial with bash or automatically grant roots. For a
+current task follow [exec.md](exec.md); any configuration grant requires the
+existing task's authorization and must remain scoped.
 
 ## The mechanism
 
@@ -57,13 +66,14 @@ For a CLI session `ask` is downgraded to deny and the question tool is removed.
 The new failure is quieter than the old one. A denied call returns an error string
 the agent reads; it then either stops ("I did not try other tools") or finishes the
 parts it could. Exit status is 0 either way, so a skipped step is visible only in
-the transcript. That is why SKILL.md now opens the session with `--permission full-access` and
-turns the first prompt clause into a write fence instead of a tool fence.
+the transcript. The historical full-access recipe removed that observed file-tool denial.
+Choose it only for already-authorized scope; prompt clauses are instructions,
+not an enforced filesystem fence. Current guidance is in [exec.md](exec.md).
 
 ## The permission flag
 
 ```bash
-aside exec --permission full-access "<prompt>"   # default recommendation
+aside exec --permission full-access "<prompt>"   # only for already-authorized scope when needed
 aside exec --permission guard "<prompt>"         # same as omitting the flag
 aside exec --permission ask "<prompt>"           # accepted, but normalizes to guard on 1.26.902
 ```
@@ -142,7 +152,7 @@ roots, but it is unreachable from a CLI because the approval cannot be answered.
 timeout, no JSON output mode, and no auto-answer for a genuine approval prompt.
 
 **Prevention was therefore prompt-side**, and under `guard` it still is. That is
-the reason SKILL.md keeps the three clauses even with `full-access` as the default.
+the reason SKILL.md keeps the three clauses even when a task uses authorized `full-access`.
 
 ## The daemon's own instruction makes it worse
 
@@ -157,18 +167,18 @@ Guard sessions receive this injected system prompt text:
 the thing that parks or drops its work, so the exec prompt has to override that
 instruction explicitly.
 
-## Two hidden CLI flags
+## Historical hidden flags (1.26.902 parser probes)
 
-Absent from `--help`, present in the parser:
+These were absent from `--help` but present in the probed parser. Their current
+support is unverified; do not use them without verifying the installed build:
 
 | Flag | Behavior |
 |---|---|
 | `-t, --thinking <level>` | Alias for `--effort`. Same values. |
 | `--log-dump <path>` | Appends every raw agent event as JSONL. Useful for diagnosing a hang after the fact. May contain sensitive browser data. |
 
-`--log-dump` is the one genuinely useful debugging affordance: if a session hung
-and you need to know which tool call suspended, re-run with it and read the last
-event.
+Inspect the existing session and destination before any retry. Logging can
+expose private browser data; do not replay a side effect solely to capture a log.
 
 ## Session creation detail
 
