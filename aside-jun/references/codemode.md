@@ -208,3 +208,24 @@ are setup work, not part of these execution recipes. Follow the current
 or [npm package page](https://www.npmjs.com/package/aside-codemode) only when the
 user separately authorizes setup. Do not add `--force` or change an account's
 configuration as a convenience fallback.
+
+## Development context selection (after issue #44 fix)
+
+The fix on the codemode development branch adds explicit CLI `--account` and
+`--host`, plus immutable configuration `browseContext: {"account":"u1", "host":"local"}`
+for CLI or configured MCP servers. Inspect the installed source/help before using
+this: released 0.9.0 still has the limitation described above. No package release
+is implied by a dev merge, and MCP per-call inputs remain `code`/`timeoutMs`.
+
+Use both selectors when identity matters. The execution envelope's `browseContext`
+reports requested values and their source, with `actualIdentity: "unverified"`.
+Under a tiny output budget the field can be null with `truncated:true`; do not
+infer an inherited identity from that loss. Verify actual browser state separately.
+Unknown or malformed execution flags now fail before guest execution.
+
+Complete explicit contexts separate reusable cache/approval state. Missing or
+partial selectors cannot safely persist approvals or reuse cached browser data. Remote
+`captureMany`/`report.build` materialization is rejected with `EREMOTEARTIFACT`
+because no verified transfer is implemented; textual browser reads remain
+available. Local materialization requires explicit `host: "local"`; an inherited
+host is not assumed local.

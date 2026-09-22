@@ -65,14 +65,16 @@ For browser work, inspect `aside --version`, relevant `--help`, and
 and host; derive absolute paths from that account instead of copying `u0` from an
 example. Never print account credential files.
 
-Codemode 0.9.0's browser runner invokes `aside repl` without per-call account/host
+Released codemode 0.9.0's browser runner invokes `aside repl` without per-call account/host
 arguments. Its MCP schema has no `account`, `host` or `cwd` field. Use it only
 when its existing execution context is verified to match the task. For a required
 nondefault account or remote host, use native Aside's explicit `--account` /
 `--host` route unless the installed codemode contract proves equivalent routing.
 Keep the same workload split on that native route: REPL for known mechanical
 steps, exec for judgment/login. Do not silently switch global defaults to make
-a recipe work.
+a recipe work. For an installed development build with the #44 fix, follow the
+[explicit context contract](references/codemode.md#development-context-selection-after-issue-44-fix);
+verify capability rather than assuming a dev merge upgraded the installed package.
 
 Read the host instructions when running Aside `exec` or resolving a missing CLI:
 [macOS](references/host-macos.md) or [Windows](references/host-windows.md).
