@@ -24,7 +24,7 @@ was updated together.
 
 ## Source proof and runtime proof
 
-The 0.9.0 source snapshot was exercised only with temporary files, narrowed roots,
+The initial 0.9.0 source snapshot checks used temporary files, narrowed roots,
 and browser access disabled. It proved:
 
 - CLI `--code-file`, `--cwd`, `search.content`, and `fs.readMany` for bounded local
@@ -69,3 +69,24 @@ from the recipe's source version, and never update it automatically.
 For invocation recipes and the older-runtime decision, read
 [Code-mode calls](codemode.md). Re-check this matrix whenever a task depends on a
 specific version, host, account, browser state, or caller integration.
+
+## Follow-up authenticated-browser check (2026-09-22)
+
+After the initial documentation checks, native Aside REPL and the same verified
+0.9.0 codemode snapshot read an existing signed-in GitHub tab on macOS.
+`browse.attach` returned `complete:true`, `truncated:false`, the expected
+authenticated controls, and `effects:[]`. The borrowed tab remained open afterward.
+No login, MFA, credential access or site mutation was attempted. This proves that
+one read-only authenticated tab path; it does not prove host MCP attachment or
+all browser/account combinations. Neither runtime package was upgraded.
+
+## Follow-up Windows CLI check (2026-09-22)
+
+Windows 11 Pro build 26200, PowerShell 5.1.26100.8655 and existing Node v24.16.0
+ran an installed codemode 0.9.0 with the documented absolute Node/CLI pair,
+`--config`, `--cwd` and `--code-file`. Two temporary fixture files returned the
+expected hits/excerpts and completeness/coverage metadata. Browser access was disabled.
+An outside-root compound read reported a per-row error despite outer `ok:true`;
+dynamic import returned `EGUESTIMPORT`/exit1. No runtime was installed or upgraded.
+This verifies the Windows CLI recipe, not Windows authenticated browsing, Vault,
+MFA, GUI launch or the signed installer.
