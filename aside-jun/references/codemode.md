@@ -232,6 +232,6 @@ Inspect real page/account state separately and preserve output-truncation signal
 Do not use local artifact materialization for an unverified remote/inherited host;
 there is no verified transfer mechanism in this skill. Use explicit `host: "local"`
 for local capture/report output. Missing or partial identity cannot safely justify
-reusing cached authenticated data or persistent approval state. Additional default
-context and administrative-argument hardening is tracked alongside the source fix;
-check the installed behavior rather than assuming every 0.9.1 build contains it.
+reusing cached authenticated data or persistent approval state. The additional default-context and administrative-argument guards shipped in
+0.9.2; the original 0.9.1 routing API alone does not include them. Inspect the
+installed version and actual schema before selecting a path.
