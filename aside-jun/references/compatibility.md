@@ -90,3 +90,19 @@ An outside-root compound read reported a per-row error despite outer `ok:true`;
 dynamic import returned `EGUESTIMPORT`/exit1. No runtime was installed or upgraded.
 This verifies the Windows CLI recipe, not Windows authenticated browsing, Vault,
 MFA, GUI launch or the signed installer.
+
+## Deployment update: 0.9.2 (2026-09-22)
+
+The earlier matrix records the investigation baseline. The subsequent deployment
+published [aside-codemode 0.9.2](https://github.com/lidge-jun/aside-codemode/releases/tag/v0.9.2)
+from commit `0936c1c2f3b4a6bb77524529fb562f7baf9e9a5a`. npm reports `latest: 0.9.2`;
+its artifact integrity equals the audited tarball. Registry signature and SLSA
+attestation verification passed on a fresh install. The exact main commit passed
+the five-job OS/Node CI matrix and release dry-run before OIDC publication.
+
+0.9.2 preserves the per-call MCP selectors described in [Code-mode calls](codemode.md).
+It requires explicit `host: "local"` for local artifact materialization, prevents
+incomplete identities from reusing persistent state, and rejects malformed
+administrative arguments before settings writes. Source-linked installs should
+retain their link and be fast-forwarded; registry installs should select the exact
+version. Do not infer that an already running MCP process has reloaded new code.
