@@ -1,176 +1,159 @@
 # aside-skill
 
-A Codex skill for driving the [Aside](https://asidehq.com) browser CLI without
-losing work to a prompt nobody can answer.
+Use [Aside](https://aside.com) from Codex, Claude Code or another coding agent.
+The `aside-jun` skill chooses between direct **aside-codemode** calls, native
+Aside REPL, and delegation to Aside's own agent. It also connects visual document
+work to the user's Aside **dev-visualizer** skill.
 
-Aside is a Chromium fork with a built-in browser agent, and its CLI runs that agent
-against your real logged-in profile. That makes it useful for anything behind a
-login, and it also makes it easy to lose work quietly: a non-interactive
-`aside exec` cannot answer a permission prompt or a question, so through 1.26.831
-it waited forever, and since 1.26.902 it denies the call and moves on with exit 0.
-This skill encodes the rules that avoid both.
+| Task | Execution |
+|---|---|
+| Known independent URLs/files/searches/captures | Caller invokes aside-codemode directly via its available MCP or CLI |
+| First inspection, one visible action, current tab, dependent flow | Native Aside REPL |
+| Login or a task needing browser judgment | Aside `exec` |
+| Composed HTML/SVG/report/PDF through Aside | Aside `exec` loads account skill `dev-visualizer` |
 
-It also covers research behind a login, which is the thing Aside can do that a hosted
-web search cannot. The same X search URL returned 289KB with no tweet markup to
-`curl`, a sign-in wall to a browser with no session, and a full tree of results to a
-signed-in Aside repl. `aside-jun/references/deep-research.md` splits that work between
-Codex, repl, and exec and gives the recipes.
+The skill does not install these tools or enforce another agent's behavior. It
+provides routing instructions and executable recipes. Explicit user choices and
+host permissions still apply. Public HTTP work and unrelated local coding work
+stay with the host's tools unless Aside/code mode was requested.
 
-It is also checked against Aside's own guidance rather than written beside it. Aside
-ships an `aside-browser` skill as a string constant inside its daemon binary; every
-normative line in it was extracted and classified, 77 rows in total, and the result
-is in `devlog/_plan/260831_aside-official-parity/001_parity-ledger.md`. Three of
-those rows were places this skill was wrong and have been fixed. One is a place
-Aside's own advice, "ASK USER AS THE LAST RESORT", ends a CLI run with nothing
-done and is deliberately overridden. The rest of the official protocol is now
-carried here, so
-you should not need to read both.
+## Direct calls from a coding agent
 
-## Install
+If the caller already exposes an identified aside-codemode MCP tool, inspect its
+live schema and call it. Otherwise use the installed CLI. Save this async guest
+body as a task-owned `batch.js`:
 
-Only the `aside-jun/` directory is the skill. `devlog/` is research and planning
-notes; do not install it.
+```js
+const hits = await search.content({ path: '.', query: 'TODO', max: 20 });
+const paths = [...new Set(hits.map(hit => hit.file))];
+const excerpts = await fs.readMany(paths, { maxBytes: 4096, totalBytes: 8192 });
+return { hits, excerpts };
+```
+
+With `codemode` already resolved and configured for the authorized project:
+
+```bash
+codemode --cwd /absolute/project --code-file /absolute/batch.js
+```
+
+For controlled execution use the resolved absolute Node/CLI pair. See
+[the codemode cookbook](aside-jun/references/codemode.md) for Bash/PowerShell,
+MCP payloads, version discovery, browser batches and failure handling. `--cwd`
+does not grant filesystem access. Read result metadata and per-file errors;
+`ok:true` or process exit zero is not a complete-content guarantee.
+
+**Aside MCP registration and caller MCP registration are different.**
+`codemode --install-mcp` configures Aside; it does not attach a tool to Codex or
+Claude Code. Tool prefixes vary by caller. Codex's native Code Mode is also a
+different runtime: codemode guest globals are available only inside codemode.
+
+## Install the skill
+
+Only `aside-jun/` is installed. `devlog/` contains the source investigation and
+verification records. Clone this repository, then copy the directory contents to
+the chosen agent's skill directory:
 
 ```bash
 git clone https://github.com/lidge-jun/aside-skill.git
 ```
 
-Then copy `aside-jun/` into whichever agent you use.
-
 ### Codex
 
 ```bash
-cp -R aside-skill/aside-jun ~/.codex/skills/aside-jun
-ls ~/.codex/skills/aside-jun/SKILL.md
+skill_dest="${CODEX_HOME:-$HOME/.codex}/skills/aside-jun"
+mkdir -p "$skill_dest"
+cp -R aside-skill/aside-jun/. "$skill_dest/"
 ```
-
-Use `"$CODEX_HOME/skills/aside-jun"` when that variable is set.
-
-```powershell
-Copy-Item -Recurse -LiteralPath aside-skill\aside-jun -Destination "$env:USERPROFILE\.codex\skills\aside-jun"
-Get-Item -LiteralPath "$env:USERPROFILE\.codex\skills\aside-jun\SKILL.md"
-```
-
-Use `$env:CODEX_HOME\skills\aside-jun` when that variable is set.
 
 ### Claude Code
 
-Same layout, no conversion needed: this skill already uses `SKILL.md` with
-`name` + `description` frontmatter, and `references/` + `scripts/` are exactly the
-supporting-file structure Claude Code expects.
-
 ```bash
-cp -R aside-skill/aside-jun ~/.claude/skills/aside-jun
+skill_dest="$HOME/.claude/skills/aside-jun"
+mkdir -p "$skill_dest"
+cp -R aside-skill/aside-jun/. "$skill_dest/"
 ```
+
+For a project-only Claude install use `.claude/skills/aside-jun/`. Keep the whole
+folder so relative references resolve. Invoke `/aside-jun`, or let the matching
+description select it. See [Claude skills documentation](https://code.claude.com/docs/en/skills).
+
+### Windows PowerShell
+
+Choose the actual destination, then copy the contents rather than nesting an
+extra `aside-jun` directory on updates:
 
 ```powershell
-Copy-Item -Recurse -LiteralPath aside-skill\aside-jun -Destination "$env:USERPROFILE\.claude\skills\aside-jun"
+# Codex: respect CODEX_HOME when set. For Claude use
+# $skillDest = Join-Path $env:USERPROFILE '.claude\skills\aside-jun'
+$codexRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$skillDest = Join-Path $codexRoot 'skills\aside-jun'
+New-Item -ItemType Directory -Force -Path $skillDest | Out-Null
+Get-ChildItem -Force -LiteralPath 'aside-skill\aside-jun' |
+  Copy-Item -Recurse -Force -Destination $skillDest
+Get-Item -LiteralPath (Join-Path $skillDest 'SKILL.md')
 ```
 
-The **directory name becomes the slash command**, so this installs as
-`/aside-jun`. Claude Code also loads it automatically when a request matches the
-`description`. Confirm with `/skills`.
-
-For a project-only install use `<project>/.claude/skills/aside-jun/` instead.
-Claude Code picks up edits during a session, but restart it if you created
-`~/.claude/skills/` after launching. Uninstall by deleting the directory.
-
-Reference: [Extend Claude with skills](https://code.claude.com/docs/en/skills).
-
-### Cursor
-
-Cursor does not read `SKILL.md`. It uses **project rules** under `.cursor/rules/`,
-the file must end in `.mdc` (a plain `.md` there is ignored), and the frontmatter
-keys are `description`, `globs`, and `alwaysApply`. Convert:
-
-```bash
-mkdir -p .cursor/rules
-{
-  echo '---'
-  echo 'description: "Drive the Aside browser CLI for authenticated web work without hanging it"'
-  echo 'alwaysApply: false'
-  echo '---'
-  echo
-  sed '1{/^---$/!q;};1,/^---$/d' aside-skill/aside-jun/SKILL.md
-} > .cursor/rules/aside-jun.mdc
-```
-
-That strips this repo's header and writes Cursor's. With `description` set and
-`alwaysApply: false`, Cursor decides when the rule applies. Use
-`alwaysApply: true` to load it every session, or `globs:` to attach it only when
-matching files are in context; with no activation field it becomes a manual rule
-invoked as `@aside-jun`.
-
-Caveat: relative links to `references/` will not resolve from `.cursor/rules/`.
-Copy `references/` alongside the rule, or rely on the entrypoint alone.
-
-Reference: [Cursor Rules](https://cursor.com/docs/rules).
+Copying replaces matching files; back up user-edited skill files before an update.
+Reload the skill in the agent before checking the new routing behavior. This task's
+repository changes do not automatically update installed copies.
 
 ### Other agents
 
-The skill is plain Markdown with YAML frontmatter, so most agents that read a
-prompt file will take it. Point the agent at `aside-jun/SKILL.md`, or paste it in
-if the tool has no skill directory. Rename the destination folder freely, but keep
-it matching the `name:` field inside `SKILL.md`.
+Point a compatible skill loader at `aside-jun/SKILL.md`, preserving its supporting
+files. For a rules-only host, add a rule that tells the agent when to read that
+file and its selected references; copying just the entrypoint loses the cookbook.
+No agent-specific MCP tool name or plugin installation is assumed.
 
-A skill is a capability; a plugin marketplace is a distribution mechanism. This
-repository is a standalone skill installed by copying a directory, so there is
-nothing to `/plugin install` here.
+## Optional capabilities and setup
+
+- Aside CLI/browser: follow the [official setup](https://docs.aside.com/help/developers).
+  Windows now has a signed PowerShell installer that adds user PATH; Settings >
+  Developers also installs the CLI. Historical fallbacks are in the host reference.
+- [aside-codemode](https://github.com/lidge-jun/aside-codemode): install/configure
+  only when requested. The 0.9.0 result contract is the baseline for complete
+  search disclosures; do not silently upgrade an older installation.
+- [aside-visualizer](https://github.com/lidge-jun/aside-visualizer): installs as
+  `dev-visualizer` inside a selected Aside account. See the
+  [handoff recipe](aside-jun/references/visualizer.md). It is not automatically
+  installed alongside this coding-agent skill.
+
+Browser use needs a verified account/host context. Codemode 0.9.0 does not expose
+per-call browser account/host selectors, so a nondefault requirement may need
+native Aside with explicit flags. Local filesystem batches need no browser login.
 
 ## Layout
 
+```text
+aside-jun/
+  SKILL.md                 common routing and execution boundaries
+  agents/openai.yaml       Codex UI metadata
+  references/codemode.md   direct caller CLI/MCP recipes
+  references/visualizer.md Aside account skill handoff
+  references/exec.md       noninteractive delegation contract
+  references/compatibility.md dated evidence and known differences
+  references/              REPL, credentials, host, research and scheduling details
+  scripts/                 catalog refresh, session prep and element-crop helpers
+devlog/                    source research, plan and verification evidence
 ```
-aside-jun/            the skill itself - this is what gets installed
-  SKILL.md            entrypoint: hang rules, exec contract, repl routing
-  agents/             UI metadata
-  references/         permissions, repl API, deep research, credentials,
-                      scheduling, builtin catalog, superseded skill
-  scripts/            regenerate the builtin-skill catalog after an Aside update
-devlog/               how the skill was researched and built
-```
 
-## What it covers
+## Verification and limits
 
-The skill leads with the failure mode, because it is silent either way. Through
-1.26.831 a suspended run printed its tool-call line and then nothing; on 1.26.902
-an outside-root file call is denied by policy and the run continues, so a skipped
-step shows only in the transcript. Both were verified against a live install.
-`--permission full-access` removes the deny for the paths a task names, and the
-fixed prompt contract plus a host timeout cover the rest.
+The [compatibility reference](aside-jun/references/compatibility.md) separates
+current official docs, installed versions and runtime probes. New CLI/MCP recipes
+were checked against a temporary 0.9.0 source snapshot without upgrading the
+installed package or modifying accounts. Browser schema validation does not prove
+authenticated rendering, and raw MCP protocol smoke does not prove a specific
+Codex/Claude host has attached that server.
 
-That deadline lives in the host layer, not in this README. macOS and Windows each
-have a file with bash and PowerShell recipes:
-`aside-jun/references/host-macos.md` and `aside-jun/references/host-windows.md`.
-A fired deadline exits `142` on every OS and shell. Do not call a bare `timeout`.
+Older permission and session-retention measurements remain dated diagnostics.
+No blanket disabling of biometrics or automatic full-access/persistence changes
+is needed to follow the skill. Actual artifacts and destination state, not an
+agent's success narrative, are the completion evidence.
 
-It also routes work between the two surfaces. `exec` delegates to Aside's agent for
-logins, judgment, and Aside's own builtin skills. `repl` is a Playwright-style
-surface Codex drives directly, and it throws on a bad path, where exec under
-`guard` skips it.
+## Native REPL compatibility helpers
 
-`aside-jun/references/permissions.md` documents the mechanism with reproduction
-commands, including the `--permission` flag and the narrower grant-run-restore
-sequence for a task that needs one outside directory.
-`devlog/_plan/260830_aside-skill/000_research.md` has the full binary analysis.
-
-## Requirements
-
-macOS or Windows. The CLI is Mach-O on macOS and PE `aside.exe` on Windows. A
-local run needs the GUI app. At least one signed-in account; verify with
-`aside account list`.
-
-Install the Aside CLI:
-
-- macOS: the documented `curl ... install.sh | bash` path.
-- Windows: Settings > Developers. That is the documented Windows route
-  (components changelog 1.26.907.1712). `curl | bash` is not.
-
-Host-layer commands (deadline, lock, scheduler) are in
-`aside-jun/references/host-macos.md` and `aside-jun/references/host-windows.md`.
-Each file has bash and PowerShell forms. PATH `python3` on Windows is the Store
-stub; use the Aside bundled runtime.
-
-Measured against CLI `1.26.906.1630`, GUI `1.0.910.1`, daemon `1.26.910.1749` on
-both macOS 27.0 arm64 and Windows 11 (26200). Older research notes cite
-`1.26.902.1732` / `1.26.902.1713`. Offsets in those notes are build-specific;
-the behavioral rules are not. Do not pin a version string as a requirement.
+The [REPL reference](aside-jun/references/repl-api.md) includes idempotent session
+directory preparation and verified element capture. The latter captures a full
+viewport and crops on the caller host with an already available Pillow runtime:
+native locator screenshots fail and native clip origin can be ignored. These are
+skill-level mitigations for issues #1/#2, not patches to Aside's daemon.
