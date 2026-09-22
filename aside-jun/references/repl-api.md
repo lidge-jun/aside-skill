@@ -106,17 +106,59 @@ rejects the call before it reaches the page.
 await p.locator('h1').screenshot({ type: 'png' });   // Error: Invalid parameters
 ```
 
-Clip the page instead. Measured on CLI `1.26.906.1630`: the workaround returns a real
-PNG (`137,80,78,71` signature, 241 bytes for an 864x32 heading) where the direct call
-throws.
+The supported skill path is full-viewport capture plus host-side cropping. On
+2026-09-22 (daemon 1.26.921.1617), native `clip.x/y` returned the right dimensions
+but captured the wrong origin; `fullPage:true` did not repair it. A valid PNG header
+or matching dimensions alone is not element-capture proof.
 
-```js
-const box = await p.locator('h1').boundingBox();
-const png = await p.screenshot({ type: 'png', clip: box });
+Use [repl-helpers.js](../scripts/repl-helpers.js) in a native REPL invocation:
+`captureElementSource(page, selector, {path})` requires one visible element that
+fits the viewport, prepares the session directories, saves an **uncropped** source
+and returns measured `box`/`viewport` geometry with `cropped:false`. It detects
+movement during capture. It does not alter native methods or browser settings.
+
+The coding-agent host reads the installed helper source and prepends it to the
+same REPL script. Native REPL's guarded filesystem must not be asked to read the
+coding agent's skill directory. For example, save this as a host-side Python job
+and substitute the observed selector, selected account, CLI and target tab ID:
+
+```python
+from pathlib import Path
+import json, subprocess
+helper = Path('/absolute/installed/aside-jun/scripts/repl-helpers.js').read_text()
+code = 'const compat = ' + helper + ';\n' + """
+const p = await attachBrowserTab('<observed-target-id>');
+console.log((await snapshot(p, {interactive:true})).tree);
+const capture = await compat.captureElementSource(p, '<observed-selector-or-ref>',
+  {path:'artifacts/element-source.png'});
+console.log(JSON.stringify({capture, pwd}));
+"""
+result = subprocess.run(['/absolute/aside', '--account', 'u1', '--host', 'local',
+                         'repl', code], capture_output=True, text=True, timeout=120)
+print(result.stdout)  # inspect trailing marker AND returned geometry/artifact
 ```
 
-`page.screenshot()`, `annotatedScreenshot()` and `cua.getVisibleScreenshot()` are
-unaffected. Reported upstream as aside-skill issue #1, still open.
+Read the returned source on its execution host (retrieve it first when remote).
+Save the returned `capture` object as a geometry JSON file. Use an **existing**
+Python runtime with Pillow for the crop; do not install a package implicitly:
+
+```bash
+"$PYTHON_WITH_PILLOW" /absolute/installed/aside-jun/scripts/crop-element.py \
+  /absolute/element-source.png /absolute/capture.json /absolute/element.png
+```
+
+[crop-element.py](../scripts/crop-element.py) uses actual PNG-to-viewport scale,
+checks bounds/aspect ratio and refuses to overwrite an existing output. It keeps
+the original source. Inspect the cropped artifact for location and content before
+claiming success. A missing Pillow runtime is a reported prerequisite; an uncropped
+viewport must never be presented as the requested element. Current tests include
+an offset element at CSS (48,40), size120×60, DPR2, with all four crop corners
+matching the element and no white offset.
+
+This mitigates [issue #1](https://github.com/lidge-jun/aside-skill/issues/1) in this
+skill; it does not repair Aside's proprietary daemon. `page.screenshot()` without
+clip remains the source capture route. `annotatedScreenshot()` and
+`cua.getVisibleScreenshot()` are separate viewport/overlay surfaces.
 
 `waitFor` states are exactly `attached`, `detached`, `visible`, `hidden`. Default
 timeout 3000ms.
@@ -193,16 +235,27 @@ create parents, so the first write throws:
 ENOENT: no such file or directory, open '...\sessions\<id>\tmp\probe.txt'
 ```
 
-`mkdir` first, which the download recipe below already does:
+Prepare both directories before the first file write. The same helper expression
+above exposes an idempotent operation; read/prepend its source on the calling host:
 
 ```js
+await compat.prepareSessionDirs();
+await fs.writeFile('./tmp/probe.txt', 'ready');
+```
+
+Without the helper, the equivalent native calls are:
+
+```js
+await fs.mkdir('./tmp', { recursive: true });
 await fs.mkdir('./artifacts', { recursive: true });
 ```
 
 Two calls are measured exceptions and create their own parent: `page.screenshot({ path })`
 and `page.pdf({ path })`. Everything else, including `fs.writeFile`, needs the `mkdir`.
 `download.saveAs` has not been measured - treat it as needing one. Reported upstream as
-aside-skill issue #2, still open.
+[aside-skill issue #2](https://github.com/lidge-jun/aside-skill/issues/2).
+The helper fixes this skill workflow by explicit initialization; automatic native
+session allocation remains an upstream behavior, not a change made here.
 
 Anything else throws immediately:
 

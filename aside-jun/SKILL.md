@@ -94,6 +94,9 @@ and measured behavior take precedence over stale examples. See the dated
 - One-shot `aside repl "..."` commands have separate temporary sessions. Keep an
   inspect–act–verify flow and download verification inside one invocation. Borrow
   an existing tab when it must survive; use current snapshots and real refs.
+- Before writing session files, prepare `./tmp` and `./artifacts`. For element
+  screenshots use the [tested source-capture and host-crop workflow](references/repl-api.md);
+  native locator capture and clip origin are unreliable on measured builds.
 - A timeout or indeterminate effect may leave completed side effects behind.
   Inspect the destination state before retrying. Do not repeat a submission just
   because a CLI stopped reporting it.

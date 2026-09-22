@@ -132,7 +132,7 @@ aside-jun/
   references/exec.md       noninteractive delegation contract
   references/compatibility.md dated evidence and known differences
   references/              REPL, credentials, host, research and scheduling details
-  scripts/                 builtin catalog refresh helper
+  scripts/                 catalog refresh, session prep and element-crop helpers
 devlog/                    source research, plan and verification evidence
 ```
 
@@ -149,3 +149,11 @@ Older permission and session-retention measurements remain dated diagnostics.
 No blanket disabling of biometrics or automatic full-access/persistence changes
 is needed to follow the skill. Actual artifacts and destination state, not an
 agent's success narrative, are the completion evidence.
+
+## Native REPL compatibility helpers
+
+The [REPL reference](aside-jun/references/repl-api.md) includes idempotent session
+directory preparation and verified element capture. The latter captures a full
+viewport and crops on the caller host with an already available Pillow runtime:
+native locator screenshots fail and native clip origin can be ignored. These are
+skill-level mitigations for issues #1/#2, not patches to Aside's daemon.
