@@ -159,3 +159,19 @@ three disjoint Sol worker slices and corrected issues found by fresh-reader and
 independent review. Verification and limits are in 023_verification.md. The user
 also authorized codemode issue filing; reproduced unsupported selector acceptance
 and opened issue44 without browser/account actions.
+
+### wp2 closure decision
+
+All requested local skill changes are implemented and independently reviewed.
+The source-extracted recipe gate, meaningful negative controls, frontmatter/UI
+metadata validation and link checks passed; the final C receipt binds the gate to
+the committed tree. Close wp2 and the goal after recording that receipt. No
+additional implementation phase is needed. Future host-specific browser/Windows
+or installed-skill synchronization is outside this delivery's stated proof scope.
+
+What did not improve: this change does not add missing account/host selectors to
+codemode itself or attach an MCP server to a caller. Issue44 records the former.
+The rejected hypothesis was that a generic execute_code name or Aside-local MCP
+registration proves caller availability. A future exposed tool with incompatible
+schema or missing result metadata would invalidate that invocation path and must
+be reported rather than treated as supported.

@@ -60,3 +60,8 @@ verified 0.9.0 snapshot. Windows commands and actual Codex/Claude MCP attachment
 were not executed here; browser examples have schema proof, not browser E2E.
 Only the explicitly authorized upstream issue #44 was published. No push, install,
 account configuration change or sibling update occurred.
+
+Final receipt command: `cxc receipt test --session <current-session> -- python3
+ devlog/_plan/260922_codemode-routing/022_verify.py --codemode-cli <verified-0.9.0-source>/bin/codemode.mjs`.
+Source-bound machine receipt is retained in this session's .codexclaw/evidence.
+Final independent reviewer is closed; no background writer remains.
