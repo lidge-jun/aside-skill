@@ -54,3 +54,18 @@ fixture and independently repeated the positive invocation.
 
 This is Windows shell/CLI/filesystem evidence, not Windows browser, Vault, MFA or
 installer proof. Existing runtime and account configuration were left unchanged.
+
+## Final installation read-back
+
+Both existing Codex installations (macOS and the verified Windows host) were
+backed up and refreshed. All 16 installed files matched the repository's skill
+bundle by SHA-256; the Windows transferred archive hash was also verified before
+extraction. No linked installation was overwritten. Backups and detailed path
+receipts remain outside the public repository. No new host was provisioned, and
+no Claude installation was present to update.
+
+The final skill bundle was downloaded from remote revision
+1b8614af8cb871d9f9472f6b581cf69084b1cd80. This later delivery-record-only commit
+does not change that bundle. Codex can load the updated skill on the next turn.
+Draft PR: https://github.com/lidge-jun/aside-skill/pull/3 . Branch push was
+explicitly authorized; the PR remains unmerged.
