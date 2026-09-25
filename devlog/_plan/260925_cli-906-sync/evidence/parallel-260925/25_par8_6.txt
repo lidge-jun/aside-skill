@@ -1,0 +1,7 @@
+[system][warning] DO NOT USE tree.split() - you're hiding important context from snapshot. don't hesitate to print the full tree or diff. 
+
+✔︎ Opened a new tab and set it active: tabs[0], page → Example Domains (https://www.iana.org/help/example-domains)
+OPEN6 87573AE0FF6928C69271B4D62C2B434D
+JOB6 {"title":"Example Domains","url":"https://www.iana.org/help/example-domains","own":"87573AE0FF6928C69271B4D62C2B434D","session":["87573AE0FF6928C69271B4D62C2B434D"],"treeLines":47}
+[2m[ok | 2205ms][0m
+exit=0

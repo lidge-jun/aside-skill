@@ -1,0 +1,7 @@
+✔︎ Opened a new tab and set it active: tabs[3], page → Example Domains (https://www.iana.org/help/example-domains)
+✔︎ Opened a new tab and set it active: tabs[3], page → Example Domain (https://example.net/)
+✔︎ Opened a new tab and set it active: tabs[3], page → Example Domain (https://example.com/)
+✔︎ Opened a new tab and set it active: tabs[3], page → Example Domain (https://example.org/)
+PALL {"settled":["fulfilled","fulfilled","fulfilled","fulfilled"],"titles":["Example Domain","Example Domain","Example Domains","Example Domain"],"ids":["6960A455542F7B7420AC0643CB090E98","AAA0588DA41898629BF63D596A0631BB","F36E68D7D7399675DAFA10E45F7B9724","19619BBD5E81C2A7A91BC0949A980FD5"],"session":4,"pageNow":"AAA0588DA41898629BF63D596A0631BB"}
+[2m[ok | 851ms][0m
+exit=0

@@ -1,0 +1,7 @@
+[system][warning] DO NOT USE tree.split() - you're hiding important context from snapshot. don't hesitate to print the full tree or diff. 
+
+✔︎ Opened a new tab and set it active: tabs[0], page → Example Domain (https://example.org/)
+OPEN1 1BC7C8EBB2AA90DA3676FD2B54F084C0
+JOB1 {"title":"Example Domain","url":"https://example.org/","own":"1BC7C8EBB2AA90DA3676FD2B54F084C0","session":["1BC7C8EBB2AA90DA3676FD2B54F084C0"],"treeLines":5}
+[2m[ok | 554ms][0m
+exit=0

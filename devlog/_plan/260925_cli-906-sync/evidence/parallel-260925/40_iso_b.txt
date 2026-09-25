@@ -1,0 +1,4 @@
+✔︎ Opened a new tab and set it active: tabs[0], page → Example Domain (https://example.org/)
+B0 1790348483407 {"own":"63146A5A36397AD881F622664116830B","page":"63146A5A36397AD881F622664116830B","session":["63146A5A36397AD881F622664116830B"]}
+[2m[ok | 460ms][0m
+exit=0
