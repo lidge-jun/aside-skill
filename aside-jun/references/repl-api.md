@@ -55,6 +55,32 @@ On Windows `pwd` is a backslash path, and the session directory is date-prefixed
 and the directory name differ. Each `aside repl` call creates a new session
 directory, so relative artifacts do not survive across invocations.
 
+## Parallel pages
+
+Measured 2026-09-26 on macOS CLI 1.26.906 with public read-only pages
+(`devlog/_plan/260925_cli-906-sync/011_probe-result.md`):
+
+- Separate one-shot `aside repl` processes run concurrently and stay isolated:
+  each has its own temporary session and its own `tabs`. 4 at once took 1.6 s
+  against 3.6 s sequential; 8 at once all succeeded. 4 and 8 were observed, not
+  a published limit.
+- Inside one invocation, `Promise.allSettled(urls.map(u => openTab(u)))` opened
+  4 tabs in about 1 s. Use the returned Page handles. The global `page` after
+  concurrent opens is whichever tab settled last (the 2nd of 4 in the probe), so
+  never read `page` there.
+- Track tabs by `p.targetId`; it equals the `listBrowserTabs()` entry's
+  `targetId`. Close each owned tab in `finally`.
+- Only independent reads fan out. Dependent steps, forms, carts and logins stay
+  sequential in one flow.
+
+```js
+const r1 = await Promise.allSettled(urls.map(u => openTab(u)));
+const ps1 = r1.filter(x => x.status === 'fulfilled').map(x => x.value);
+try {
+  console.log(JSON.stringify(await Promise.all(ps1.map(async p => ({ id: p.targetId, title: await p.title() })))));
+} finally { for (const p of ps1) await closeTab(p); }
+```
+
 ## Page
 
 Navigation and reads:

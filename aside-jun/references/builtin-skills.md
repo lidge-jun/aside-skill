@@ -7,6 +7,13 @@ the script defaults the account root per OS and emits a `Platform` column.
 
 Aside owns these and ships updates with the app; re-run the script after an Aside update.
 
+**Staleness (2026-09-25).** These tables come from the 902 (macOS) and 906
+(Windows) trees. CLI 1.26.916.1741 is on offer and was not installed. On macOS
+CLI 1.26.906 `aside skills list` printed 11 names: `aside`, `google-accounts`,
+`google-docs`, `google-gmail`, `google-search`, `google-sheets`, `linkedin`,
+`Messages`, `notion`, `slack`, `youtube`. Trust the live `aside skills list` /
+`show` output over this file.
+
 `aside exec` loads them on its own when the prompt names one. Codex can read any skill
 body with `aside skills show <name>`; `aside skills list` prints the subset marked
 `CLI listed` below.

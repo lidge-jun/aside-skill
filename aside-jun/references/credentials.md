@@ -1,7 +1,21 @@
 # Credentials and first-run setup
 
 Aside can sign in through Aside Vault without exposing a raw password to the
-agent. Unlock state, the agent access policy, and any MFA, passkey, CAPTCHA, or
+agent.
+
+**Sign-in is exec's job first.** When a task reaches a login page, hand the
+login to `aside exec` (or the attached native `exec` tool) inside the same task
+prompt. Its agent searches Aside Vault and any connected password manager,
+autofills, and may choose a sign-in route such as SSO with the signed-in
+browser account (exec's judgment; not separately measured here). Do not ask the
+user to sign in or unlock anything beforehand. Ask the human only after exec
+reports a concrete blocker: locked Vault, access policy `Never`, no matching
+credential, MFA, passkey, CAPTCHA or identity verification. Exec signing in
+stays inside the task's authorization: no account switching, no policy or
+biometric changes, and no new account creation without the user's say-so.
+Observed 2026-09-25: a coding agent told the user to sign in to Cloudflare by
+hand; the user corrected it because exec could do the login itself.
+ Unlock state, the agent access policy, and any MFA, passkey, CAPTCHA, or
 identity-verification step remain under human control. Read this before asking
 `exec` to log in anywhere.
 
@@ -20,8 +34,8 @@ If the user has a choice of provider, 1Password is the smoother one for
 agent-driven sign-in. Aside ships a builtin `1password` skill that `exec` can
 load by name. The other four sidestep a vault-PIN ceremony the same way.
 
-Practical sequence on that build: the user signs in once in the Aside window, or
-`exec` searches the Aside vault or a connected provider and autofills. The
+Practical sequence on that build: `exec` searches the Aside vault or a connected
+provider and autofills; the user signs in by hand only if exec reports a blocker. The
 2026-09-11 Windows inventory did not include the `apple-passwords` builtin skill;
 do not generalize that observation to an uninspected runtime.
 
@@ -37,7 +51,8 @@ Official documentation checked 2026-09-22 separates two choices:
 
 Unlock method does not expand agent access. Before an unattended login task, the
 user chooses the access policy and unlocks the Vault when their policy requires
-it. If the Vault is locked or the site requires MFA, passkey approval, CAPTCHA,
+it. That is a standing user choice, not a pre-task step the agent requests: exec
+attempts first. If the Vault is locked or the site requires MFA, passkey approval, CAPTCHA,
 or identity verification that the current run cannot complete, return an explicit
 blocked result. Do not change biometric settings, access policy, or internal
 password-settings JSON to make the task proceed.
@@ -162,9 +177,10 @@ listing results omitted secret values. The builtin `password-manager` skill
 documented it; `exec` could load that skill by name. Re-check these surfaces in
 the active runtime before depending on them.
 
-Practical consequence: on macOS, unlock `applePasswords` from repl yourself before
-delegating, or let `exec` use `passwordManager` and the provider skills. Do not
-ask `exec` to perform the Apple Passwords key ceremony. On Windows, skip
+Practical consequence: let `exec` use `passwordManager` and the provider skills
+by default. The Apple Passwords key ceremony needs a human to read a 6-digit
+code, so use it only after exec reports that the needed credential lives there,
+and do not ask `exec` to perform that ceremony. On Windows, skip
 `applePasswords` and use `passwordManager` / the provider skills.
 
 ### The unlock outlived the session in the measured build
@@ -288,9 +304,11 @@ used `applePasswords.getOtps(url)`; do not assume either fact for a newer runtim
 
 ## The pattern that works
 
-When practical, sign in in the Aside window and delegate only after confirming the
-intended account. A live session can avoid credential handling, but it does not
-remove later MFA, step-up verification, expiry, or Vault-policy boundaries.
+Delegate the sign-in to `exec` with the intended account named in the prompt
+(`--account`), and let it report which account it ended up in. An existing live
+session skips credential handling entirely. Neither removes later MFA, step-up
+verification, expiry, or Vault-policy boundaries; those come back as blockers
+for the human.
 
 ## Two runs worth learning from
 

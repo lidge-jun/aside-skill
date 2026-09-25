@@ -14,10 +14,11 @@ or an installer. The user's chosen tools, scope and permissions remain decisive.
 
 | Work | Route | Read |
 |---|---|---|
+| Any Aside work when this caller's live tool list shows the native Aside MCP (`aside mcp`: `exec`, `repl`, often `memory_search`) | Call those tools instead of shelling out to the CLI; the REPL/exec rules below still apply | [Delegation](references/exec.md), [REPL](references/repl-api.md) |
 | Directory/project search within an explicitly requested Aside/code-mode workflow; 2+ independent known files, URLs, queries or captures | **Direct aside-codemode** through a tool exposed to this caller, otherwise the installed CLI | [Code-mode calls](references/codemode.md) |
 | First look at an unfamiliar page; one visible click; a dependent form/wizard step | Native Aside REPL, inspect → act → inspect | [REPL](references/repl-api.md) |
 | Current/already-open tab | Identify and attach the existing tab; never replace it with a fresh URL batch | [REPL](references/repl-api.md); verified codemode `browse.attach` is also available |
-| Login, MFA, account change, approval, or a browser task needing judgment | Aside `exec`, within the task's existing authorization; stop when a human gesture is required | [Delegation](references/exec.md), [credentials](references/credentials.md) |
+| Login, MFA, account change, approval, or a browser task needing judgment | Aside `exec` — it signs in by itself; hand it the login first. Within the task's existing authorization; stop when a human gesture is required | [Delegation](references/exec.md), [credentials](references/credentials.md) |
 | Composed HTML/SVG report, visual explanation or PDF through Aside | `exec` using the selected Aside account's **dev-visualizer** skill; codemode may collect inputs first | [Visualizer handoff](references/visualizer.md) |
 | A public page that only needs HTTP, or unrelated local coding work | The host's existing reader/search/file tools, unless the user explicitly selected Aside/code mode | No Aside setup needed |
 
@@ -25,6 +26,20 @@ Independent means one item's result is not needed to choose the next item's
 operation. Do not turn a login flow, cart, wizard or uncertain side effect into a
 parallel batch. A batch failure is a result to inspect, not an invitation to replay
 completed actions.
+
+Two independent reads can also run as concurrent one-shot `aside repl`
+processes (4 and 8 observed isolated, zero leaked tabs); see
+[parallel pages](references/repl-api.md#parallel-pages).
+
+## Sign-in is exec's job
+
+`aside exec` logs in on its own with Aside Vault or a connected password
+manager. When a site needs a login, delegate the sign-in to exec in the task
+prompt; do not ask the user to sign in or unlock first. Ask the human only
+after exec reports a concrete blocker (locked Vault, no credential, MFA,
+passkey, CAPTCHA). No account switching, new accounts or policy changes.
+Prompt clause and details: [exec](references/exec.md#sign-in-is-delegated),
+[credentials](references/credentials.md).
 
 ## Direct code-mode calls from Codex and Claude
 
@@ -65,13 +80,20 @@ For browser work, inspect `aside --version`, relevant `--help`, and
 and host; derive absolute paths from that account instead of copying `u0` from an
 example. Never print account credential files.
 
-Released codemode 0.9.0's browser runner invokes `aside repl` without per-call account/host
-arguments. Its MCP schema has no `account`, `host` or `cwd` field. Use it only
-when its existing execution context is verified to match the task. For a required
+For personal context (people, projects, preferences) query Aside memory before
+asking the user: `aside memory search "<q>" --json`, `list`, `show <path>`, or
+the attached `memory_search` tool. It is read-only; never edit memory files, and
+route "remember this" through exec.
+
+Codemode's browser runner inherits native `aside repl` defaults unless the
+installed build supports explicit context. npm `latest` is 0.9.2, which adds
+CLI `--account`/`--host` and per-call MCP `account`/`host`; 0.9.0 has neither.
+`codemode` has no `--version`, so identify the build by
+[resolving its package](references/codemode.md#identify-the-installed-version)
+and check the live schema. When the verified build cannot pin a required
 nondefault account or remote host, use native Aside's explicit `--account` /
-`--host` route unless the installed codemode contract proves equivalent routing.
-Keep the same workload split on that native route: REPL for known mechanical
-steps, exec for judgment/login. Do not silently switch global defaults to make
+`--host` route. Keep the same workload split on that native route: REPL for
+known mechanical steps, exec for judgment/login. Do not silently switch global defaults to make
 a recipe work. For an installed build with the #44 fix, follow the
 [explicit context contract](references/codemode.md#context-selection-in-the-091-source-contract);
 verify capability rather than assuming a dev merge upgraded the installed package.
@@ -102,6 +124,14 @@ and measured behavior take precedence over stale examples. See the dated
 - A timeout or indeterminate effect may leave completed side effects behind.
   Inspect the destination state before retrying. Do not repeat a submission just
   because a CLI stopped reporting it.
+- Pass subcommands as separate argv words. Anything the CLI does not parse as
+  a subcommand becomes an agent prompt: `aside version`, or `"account list"` as
+  one quoted word under zsh, starts a paid exec session. Call agent runs
+  explicitly as `aside exec -- "<prompt>"`.
+- Exit 0 is not success: REPL errors end in `[error | Nms]`, and exec printed
+  ` • Error 403` (provider quota) with exit 0 on 1.26.906. Read the output.
+- Run `aside skills install` only when the user asks; it installs the official
+  aside-browser skill into coding agents, which shadows this one.
 - Verify actual content and artifacts before reporting completion. A local path
   returned by a remote Aside host is not yet a file delivered to this caller.
 

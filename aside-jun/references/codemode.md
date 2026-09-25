@@ -29,13 +29,34 @@ If neither route exists, report that aside-codemode is a prerequisite and contin
 only with already available, authorized native tools. Do not install, update, edit
 configuration, widen roots, or enable browsing as an implicit recovery step.
 
+## Identify the installed version
+
+`codemode` has no `--version` or `--help`; both return
+`{"ok":false,...,"code":"EBADARGV"}` on 0.9.2. Resolve the command to its real
+file and read the neighbouring package metadata instead:
+
+```bash
+CM="$(command -v codemode)"; real="$(readlink -f "$CM")"
+# a shell launcher (e.g. ~/.local/bin/codemode) names its target in its exec line
+head -5 "$real"
+node -p "require('$(dirname "$(dirname "$real")")/package.json').version"
+```
+
+A `browserContext` object in the result envelope means the #44 routing report
+is present (0.9.1+). A host can hold several installs; on the measured Mac
+(2026-09-25) `~/.local/bin` and nvm resolved to a 0.9.2 checkout while
+`/opt/homebrew/bin/codemode` was 0.9.1. PATH order decides which one a
+non-login shell gets, so pin the absolute path you verified. npm `latest` was
+0.9.2 on that date.
+
 ## CLI: local search and bounded reads
 
 Guest code is an async function body. Use injected globals such as `search`, `fs`,
 `actions`, and `browse`; `await` their operations and `return` the result. There is
 no guest `require`, `import`, `process`, Node filesystem, or assumed browser page.
 Use `actions.describe(path)` and `actions.check(path, args)` to discover the
-installed API without performing the action.
+installed API without performing the action. `path` is a full action name such
+as `browse.exec`; a bare namespace (`browse`) fails with a did-you-mean list.
 
 Save this as a task-owned UTF-8 `batch.js`:
 

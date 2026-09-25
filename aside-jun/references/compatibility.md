@@ -22,6 +22,16 @@ Aside app, CLI, daemon, component, and extension versions use separate release
 lines. A numerically newer component entry is not proof that every local surface
 was updated together.
 
+### 2026-09-25 re-check (macOS)
+
+| Surface | Version | Evidence | What it proves |
+|---|---:|---|---|
+| Installed Aside CLI | `1.26.906.1630` | `aside --version`, full `--help` walk | Still installed; `memory`, `mcp` (tools `exec`, `repl`), `host`, `session list/archive/delete`, `settings set-default-profile`, `skills install`, `--effort ultrabrowse`, `-s fast` exist on it. |
+| CLI update offered | `1.26.916.1741` | `aside guide` footer | Offer only; not installed. |
+| aside-codemode npm | `0.9.2` (`latest`) | `npm view aside-codemode version` | Registry state. |
+| Local aside-codemode | `0.9.2` checkout via `~/.local/bin` and nvm; `0.9.1` under `/opt/homebrew` | realpath + `package.json` | Two versions coexist; PATH order picks one. |
+| Parallel REPL | 4 and 8 concurrent one-shots | `devlog/_plan/260925_cli-906-sync/011_probe-result.md` | Isolation and zero tab leaks on public pages. |
+
 ## Source proof and runtime proof
 
 The initial 0.9.0 source snapshot checks used temporary files, narrowed roots,

@@ -39,6 +39,27 @@ artifact task name the installed skill and preserve the user's format/template.
 Create output subdirectories when necessary; never pass literal `~` to Aside's
 file APIs. Native REPL and exec file roots differ.
 
+## Sign-in is delegated
+
+Exec signs in by itself. It searches Aside Vault and connected password
+managers, autofills, and can pick another route such as SSO with the browser's
+signed-in account. So when the target needs a login, put the login in the same
+exec prompt as the rest of the task. Do not first ask the user to sign in in the
+Aside window or to unlock the Vault. Keep the account explicit (`--account`) and
+say in the prompt that exec must not switch accounts, create a new account, or
+change password/biometric policy. Ask the human only after exec reports a
+concrete blocker (locked Vault, policy `Never`, no matching credential, MFA,
+passkey, CAPTCHA, identity check), and then quote that exact blocker. Details
+and dated observations: [credentials](credentials.md).
+
+```text
+If a sign-in page appears, sign in yourself with Aside Vault or a connected
+password manager for <site> on this account. Do not switch accounts, create an
+account, or change password or security settings. If sign-in needs MFA, a
+passkey, a CAPTCHA, an unlocked Vault or a credential you cannot find, report
+that exact step and stop.
+```
+
 ## Run under a host deadline
 
 On macOS, after resolving the CLI, account, host, mode and prompt:
@@ -54,6 +75,10 @@ Use the Windows wrapper in [host-windows.md](host-windows.md) on Windows; a bare
 use exit 142 for their deadline. The number 300 is an example duration, not a
 universal task budget. A deadline ending the CLI does not undo work already done
 or prove the remote agent stopped.
+
+Options on 1.26.906: `-m provider/model`, `-p`, `-s fast`, and `--effort`
+(`off` … `max`, plus `ultrabrowse` for proactive browsing at the highest
+thinking level). `--permission ask` and `guard` are the same mode.
 
 Use the caller's managed background execution where available, capture its
 process handle, and poll that handle with bounded waits. Keep it separate from
@@ -75,6 +100,14 @@ Reapply the intended account/host using the installed CLI's supported global
 options. Omitting the resume prompt opens an interactive shell, so unattended
 calls must supply it. `steer` interrupts the current step; `queue` waits for it.
 Do not use the obsolete `--session` example still present on some web pages.
+`aside session list` shows sessions including unsaved ones; `archive` and
+`delete` tidy up. Delete only sessions this task created (for example the
+failed runs of a mistaken invocation), never the user's other sessions.
+
+`aside host list` and `aside host status` are read-only inspection. `aside host
+use <host>` and `aside settings set-default-profile <id>` change defaults for
+every later command; run them only when the user asks, and prefer one-shot
+`--host` / `--account`.
 Inspect current help before using any model override or undocumented logging flag
 on resume. Logs can contain private browser content.
 
@@ -87,6 +120,12 @@ when the user actually requests recurrence.
 ## Verify the outcome before retrying
 
 Aside CLI has historically exited zero for denied file tools and REPL failures.
+On 1.26.906 (2026-09-25) `aside exec` also exited 0 when the model provider
+returned 403 (quota exhausted); the output was `created new session: <id>`
+followed by a ` • Error 403: …` line and no report. Treat an ` • Error` line or a
+missing report as failure; an auth/other provider error exit code is not
+measured. A provider failure is a reason to report or to retry with an explicit
+`-m provider/model` the user already uses, not to change settings.
 Read the report, denied/failed steps and actual destination state. For files,
 check existence, nonempty contents and the requested format; for browser work,
 inspect the result on the site. A timeout, stopped stream or uncertain effect
