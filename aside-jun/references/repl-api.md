@@ -32,10 +32,15 @@ const active = await attachActiveBrowserTab();
 await closeTab(p);                        // closes owned tabs, detaches borrowed ones
 ```
 
-CLI 1.26.906.1630 help still mentions `getTabs()`, while `aside guide repl`
-documents `listBrowserTabs()`. The older 1.26.902 probe found `getTabs()` undefined.
-Use the documented `listBrowserTabs()` route; do not treat that old probe as proof
-of every newer build's globals.
+On 1.26.1115 (2026-11-26) `typeof getTabs` is `undefined` and `listBrowserTabs`
+is a function, and current help documents only `listBrowserTabs()`. Use it.
+
+Invocation forms on 1.26.1115: `aside repl "<code>"`, `aside repl --file x.js`,
+`aside repl --file -` or piped stdin (runs as one script), `aside repl -- "--code"`
+when the code starts with a dash, and `--json` for `{run:{content,error,elapsedMs}}`.
+`--account u0[:<PROFILE_ID>]`, `--profile`, `--host` and `--incognito` select
+context. CLI REPL sessions are always incognito, so the `imessage` skill (SMS
+login codes) is unavailable here; run that step through `exec`.
 
 `page` is a getter for the active page and starts `null` in a fresh CLI repl.
 `tabs` lists session-attached pages. `openTab` waits up to 5 seconds for stability.
@@ -294,8 +299,11 @@ Path escapes Project and session roots: C:\Windows\System32\drivers\etc\hosts
 on, the repl fs raises an error you cannot miss. When you only need to read or write
 a file, repl is the safer surface.
 
-The CLI still exits 0 on a `ReferenceError` and on a root escape. Do not read the
-process exit code. Parse the trailing `[error | Nms]` or `[ok | Nms]` marker.
+On CLI 1.26.1115 (macOS, measured 2026-11-26) a throw, a `ReferenceError` and a
+root escape all exit **1**, and stderr still ends in `[error | Nms]`. Check the
+exit code and, for programs, parse `--json` (`run.error` is `null` on success).
+Up to 1.26.906 every one of these exited 0; Windows has not been re-measured on
+1115, so keep parsing the trailing `[ok|error | Nms]` marker there.
 
 ## Other globals
 

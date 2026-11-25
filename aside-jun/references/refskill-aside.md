@@ -1,6 +1,15 @@
 <!-- Retained as historical reference. Superseded by the parent aside skill.
      Frontmatter intentionally removed so no skill loader indexes this file. -->
 
+> **Current equivalents (2026-11-26, CLI 1.26.1115.1556).** The yield-and-poll
+> pattern below is no longer needed: `aside exec --json --timeout 10m -- "<prompt>"`
+> returns `{session:{id},outcome,answer,error}` and stops waiting at the deadline
+> (exit 1) while the session keeps running; check it with
+> `aside session inspect <id>` and end it with `aside session stop <id>`.
+> Exit codes are now 0 completed / 1 failed or timed out / 2 bad usage. Account
+> selection is `--account u0[:<PROFILE_ID>]` / `--profile`, remote hosts use
+> `--host`. Follow current `aside --help` and the parent `SKILL.md` over the body.
+
 > Historical. Path examples here predate Windows coverage. Prefer the parent
 > `SKILL.md` and the host-layer files. Browser profile: macOS
 > `$HOME/Library/Application Support/Aside/`, Windows `%LOCALAPPDATA%\Aside\User Data`.

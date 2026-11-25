@@ -149,8 +149,14 @@ Signing up to read documentation, logging into a portal, clearing a CAPTCHA - re
 cannot do these, because `passwordManager` lives only in exec's repl tool. Delegate
 under the host-layer deadline for this OS. Bash and PowerShell recipes are in
 [host-macos.md](host-macos.md) and [host-windows.md](host-windows.md). Do not wrap
-the prompt in `perl -e 'alarm ...'`, a bare `timeout`, or a remembered
-`Start-Process` line. A fired deadline exits `142` on every OS and shell.
+the prompt in an improvised `perl -e 'alarm ...'`, a bare `timeout`, or a remembered
+`Start-Process` line; copy the host-layer form. A fired host deadline exits `142`
+on every OS and shell. Since CLI 1.26.1115, also pass `--json --timeout <d>`:
+the native timeout exits 1 and leaves the session running (`aside session
+inspect <id>` / `session stop <id>`), and the JSON answer is easier to check
+than scraped stdout. Never add `--incognito` to an account-gated run: incognito
+sessions have no Vault access. On a host without a local Aside, the remote run
+needs `aside login` or `ASIDE_API_TOKEN` plus `--host <id-or-name>`.
 
 ```text
 aside exec --permission full-access -- "Research <question> using <site>, which requires an account.

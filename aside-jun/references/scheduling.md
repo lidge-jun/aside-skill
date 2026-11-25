@@ -56,6 +56,12 @@ session with `>`, `/session`, and `/exit`, which is not something a script wants
 print `ok` and exit, so neither waits for the run. `aside session archive <id>` and
 `aside session delete <id>` clear a finished or unwanted session.
 
+Current 1.26.1115 additions: `aside session inspect <id>` shows status and the
+latest answer without resuming; `aside session stop <id>` ends a running one;
+`resume` takes `--json --timeout`; `delete` needs `--yes` unattended; and
+`steer`/`queue`/`delete` reject non-local hosts (`list`, `inspect`, `stop`,
+`archive`, `resume` accept `--host`). Retention under 1115 was not re-measured.
+
 Two different 15-minute values exist and are easy to confuse.
 `agentTabs.closeAfterIdleMinutes` in `settings.json` closes idle agent tabs and is
 configurable. `EPHEMERAL_SESSION_RETENTION_MS` deletes the session itself, is
@@ -79,7 +85,9 @@ Do not delete session rows as routine cleanup; preserve user work.
 
 ## Keep CLI sessions on the chat list
 
-`aside settings save-sessions true` puts CLI runs on the chat list. Change this
+`aside settings save-sessions enable` (`true` on 1.26.902; current help uses
+`enable`/`disable`) puts CLI runs on the chat list. Read the current value with
+`aside settings get` (`saveSessions`). Change this
 setting only when persistence is requested or already authorized. The current
 public contract does not promise indefinite resumability. Check existing settings
 and preserve them during ordinary invocation.
@@ -130,7 +138,10 @@ A lock and a deadline are both required, not optional, for unattended execution:
 the lock skips a tick while the previous one is still going, which matters because
 a parked run never exits on its own, and the deadline bounds the run itself.
 Sentinel exit code is 142 on every OS and shell. Job scripts live in the macOS
-and Windows sections below.
+and Windows sections below. Since CLI 1.26.1115, also pass `exec --json
+--timeout <d>` inside the wrapper: the native timeout exits 1 but leaves the
+session running, so a job that hits it should `aside session stop <id>` (id from
+the JSON) before the next tick, and the outer 142 deadline stays as a hard kill.
 
 ## Aside remembers on its own
 
@@ -264,7 +275,10 @@ reasonable option and continue, or report exactly what blocked you and stop.
 EOF
 )
 
-/usr/bin/perl -e 'alarm shift; exec @ARGV' 600 "$ASIDE" exec --permission full-access -- "$PROMPT" >> "$JOB/run.log" 2>&1
+/usr/bin/perl -e 'alarm shift; exec @ARGV' 600 "$ASIDE" exec --permission full-access \
+  --json --timeout 9m -- "$PROMPT" >> "$JOB/run.log" 2>>"$JOB/run.err"
+# 1.26.1115: stdout is one JSON line {session:{id},outcome,answer,error}; on exit 1
+# after --timeout, run `aside session stop <id>` before the next tick.
 ```
 
 ```powershell
@@ -447,6 +461,8 @@ EOF
 )
 
 /usr/bin/timeout --kill-after=5 600 "$ASIDE" exec --permission full-access -- "$PROMPT" >> "$JOB/run.log" 2>&1
+# (Windows 1.26.906 form. If the installed CLI's help lists --json/--timeout, add
+#  "--json --timeout 9m" before -- as in the macOS recipe; not re-measured on Windows.)
 rc=$?
 if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then rc=142; fi
 exit $rc
@@ -467,13 +483,15 @@ schtasks /Create /TN "AsideJob-yt-digest" /SC MINUTE /MO 15 /IT /F /TR "\"<locat
 ## Why the clauses matter more here
 
 Nobody is at the keyboard. A prompt that invites a question ends the run with the
-question unanswered, a denied path is skipped without an error exit, and the
+question unanswered, a denied path is skipped without an error exit (still true:
+a skipped step inside a run is not a process failure), and the
 scheduler cheerfully starts another one on the next tick. The three standing
 clauses plus a deadline plus a lock are what keep an unattended job from turning
 into a pile of stuck processes.
 
 On macOS the deadline is `/usr/bin/perl -e 'alarm shift; exec @ARGV'` (exit 142)
-and the lock is `shlock`.
+and the lock is `shlock`. From CLI 1.26.1115, `exec --timeout` (exit 1, session
+keeps running) is the inner deadline and perl the outer hard kill.
 
 On Windows the deadline sentinel is also 142. PowerShell uses `Start-Process
 -PassThru` + `WaitForExit(ms)` and `taskkill /T /F`. Git Bash uses

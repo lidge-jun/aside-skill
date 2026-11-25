@@ -38,6 +38,23 @@ The result is a deadlock with no error text. The tool-call line prints, then
 silence, until the shell timeout kills the process. A hang is indistinguishable
 from slow work by looking at output.
 
+## 2026-11-26 re-check (macOS CLI 1.26.1115.1556)
+
+- Help: `--permission ask|guard|full-access`, "ask/guard (ask before other
+  folders)", `ask` = `guard` = default. Exec exit codes are now documented:
+  0 completed, 1 failed or `--timeout` passed, 2 invalid usage. `--json` and
+  `--timeout` exist, so the "no timeout, no JSON" note below is historical.
+- Two default-mode `exec --json --timeout 2m` probes on account u0 (settings:
+  `outsideRead`/`outsideWrite` `ask`, roots empty, `sandbox.enabled` false):
+  `read_file /etc/hosts` **returned the file contents**, and `write_file
+  /tmp/_aside_guard_probe.txt` returned `Successfully wrote` (file confirmed,
+  then removed). Both runs exit 0, `outcome:"completed"`. The 1.26.902
+  "blocked by policy" rows below did not reproduce for these paths. Whether the
+  daemon now resolves the CLI default to something wider than guard, or treats
+  these paths as allowed, was not determined; do not rely on guard to fence a
+  run, and keep the prompt clauses.
+- Probe sessions were deleted with `aside session delete <id> --yes`.
+
 ## What changed in 1.26.902
 
 The suspend path above is still in the daemon bundle (its strings are present in
@@ -98,8 +115,8 @@ the help text says "--permission ask and --permission guard are the same", and
 outside-root file calls fail fast with `blocked by policy` and do not suspend
 (`evidence/probe-S4-suspension.log`). Genuine approval behaviour in the Aside window
 was not verified by this probe. If a run does park on something else (a
-credential handshake, a passkey), `aside session steer <id>` or `stop <id>` is the
-way out.
+credential handshake, a passkey), `aside session inspect <id>` shows where it is
+and `aside session steer <id>` or `aside session stop <id>` is the way out.
 
 ## The three classes, as they behaved through 1.26.831
 
@@ -148,8 +165,9 @@ permission key.
 An `always` approval would call `rememberUserApproval` and widen the session
 roots, but it is unreachable from a CLI because the approval cannot be answered.
 
-1.26.902 added `--permission` (above) and removed `--session`. There is still no
-timeout, no JSON output mode, and no auto-answer for a genuine approval prompt.
+1.26.902 added `--permission` (above) and removed `--session`. On 1.26.902 there
+was still no timeout and no JSON output mode; 1.26.1115 added `--timeout` and
+`--json`. There is still no auto-answer for a genuine approval prompt.
 
 **Prevention was therefore prompt-side**, and under `guard` it still is. That is
 the reason SKILL.md keeps the three clauses even when a task uses authorized `full-access`.
@@ -212,8 +230,10 @@ A `guard` `read_file` outside the readable roots returns
 run continues: 4.7s on macOS 1.26.902 (`evidence/probe-A-guard-readfile.log`) and
 the same string on Windows 1.26.906 (`evidence/probe-win-permission.md`, ~4.9s).
 `write_file` outside the writable roots is the same shape:
-`Permission denied: write '<path>' is blocked by policy`. Exit 0 is not a success
-signal; look for `is blocked by policy` in stdout.
+`Permission denied: write '<path>' is blocked by policy`. On those builds exit 0
+was not a success signal; look for `is blocked by policy` in the output. On
+1.26.1115 a denial inside a run still does not fail the process (the run can
+complete), so read `answer` from `--json`; see the re-check at the top.
 
 `bash` is absent from that map, so it never reaches the `ask` verdict and never
 suspends through the file-tool gate. It is confined by an OS sandbox instead, and
@@ -338,7 +358,8 @@ aside.settings.set('permission',n); \
 console.log(JSON.stringify(aside.settings.get('permission').files))"
 
 # 3. run, with the granted-root variant of the clauses
-/usr/bin/perl -e 'alarm shift; exec @ARGV' 300 "$ASIDE" exec -- "$PROMPT"
+#    (1.26.1115: add --json --timeout 5m; perl stays as the outer hard kill)
+/usr/bin/perl -e 'alarm shift; exec @ARGV' 360 "$ASIDE" exec --json --timeout 5m -- "$PROMPT"
 
 # 4. restore the saved values, not empty lists
 saved_json=$(cat "$ROOTS")

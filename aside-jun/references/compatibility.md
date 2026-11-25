@@ -32,6 +32,23 @@ was updated together.
 | Local aside-codemode | `0.9.2` checkout via `~/.local/bin` and nvm; `0.9.1` under `/opt/homebrew` | realpath + `package.json` | Two versions coexist; PATH order picks one. |
 | Parallel REPL | 4 and 8 concurrent one-shots | `devlog/_plan/260925_cli-906-sync/011_probe-result.md` | Isolation and zero tab leaks on public pages. |
 
+### 2026-11-26 re-check (macOS, CLI 1.26.1115.1556)
+
+| Surface | Version / result | Evidence | What it proves |
+|---|---|---|---|
+| Installed Aside CLI | `1.26.1115.1556` | `aside --version`, full `--help` walk of every subcommand | Current local CLI. `aside guide` offers `1.26.1121.1917` (not installed). |
+| Official agent skill | `aside-browser` v5 | `aside skills install --path <tmp>`; `aside guide` header "Skill version 5" | Entry point that defers to `aside guide`; recommends exec for most tasks. |
+| New CLI flags | `--timeout`, `--json`, `--incognito`, `--profile`, `--account u0:<PROFILE_ID>`, `--host remote` | `aside --help` | Native wait deadline and structured output exist. |
+| New/changed commands | `session inspect/stop`; `account use/status`; `host profiles/use/status`; `login --device-code/--password`, `logout`; `memory path`, `memory search -n`; `settings get/save-sessions/computer-use/analytics` with `enable`/`disable`; `skills install --target/--path`; `mcp --computer-use --app` | subcommand `--help` | `settings set-default-profile` is gone (replaced by `account use`). `steer`/`queue`/`delete` reject non-local hosts. |
+| `aside mcp` tools | `exec`, `repl`, `memory_search`, `browser_profiles`; server `aside 1.26.1115.1556` | JSON-RPC `tools/list` | `exec`/`repl` take `profile_id`; `exec` returns a `session_id`. |
+| Exit codes | repl throw / ReferenceError / root escape → 1; exec trivial run → 0 with `{"session":{"id":…},"outcome":"completed","answer":"OK","error":null}` and empty stderr | live probes (probe session deleted afterward) | Exit 0 = completed is now documented; provider-403 behavior not re-measured. |
+| `aside skills list` | 9 names | live output | See [builtin skills](builtin-skills.md). |
+| `aside settings get` (u0) | `saveSessions: true` | live output | CLI sessions on this host currently persist on the chat list. |
+| Known doc drift | `aside guide` says `save-sessions true` and `settings set-default-profile` | guide vs `--help` | Follow `--help`. |
+
+Not re-checked in this pass: Windows CLI, codemode version/selectors, Vault/MFA
+flows, provider-error exit codes.
+
 ## Source proof and runtime proof
 
 The initial 0.9.0 source snapshot checks used temporary files, narrowed roots,

@@ -48,6 +48,8 @@ Official documentation checked 2026-09-22 separates two choices:
 - `Settings > Passwords > Access policy for AI agents` controls agent use with
   `Always allow`, `While unlocked`, or `Never`. Imported items may override the
   global policy per item, and Vault access is unavailable in incognito sessions.
+  On CLI 1.26.1115 that means `aside exec --incognito` cannot autofill, and CLI
+  `aside repl` sessions are always incognito; keep sign-in inside a normal `exec`.
 
 Unlock method does not expand agent access. Before an unattended login task, the
 user chooses the access policy and unlocks the Vault when their policy requires
@@ -305,7 +307,14 @@ used `applePasswords.getOtps(url)`; do not assume either fact for a newer runtim
 ## The pattern that works
 
 Delegate the sign-in to `exec` with the intended account named in the prompt
-(`--account`), and let it report which account it ended up in. An existing live
+(`--account u0`, or `--account u0:<PROFILE_ID>` / `--profile <PROFILE_ID>` from
+`aside host profiles --json` when the account has several browser profiles), and
+let it report which account it ended up in. Do not run `aside account use` or
+`aside host use` to get there; those change defaults for every later command.
+Remote hosts need the CLI itself signed in (`aside login`, device code by default,
+or `ASIDE_API_TOKEN`); that is CLI auth, not a site sign-in, and is the user's
+step. Use `exec --json --timeout <d>` and read `outcome`/`answer`: a blocked
+sign-in normally comes back as a completed run whose answer names the blocker. An existing live
 session skips credential handling entirely. Neither removes later MFA, step-up
 verification, expiry, or Vault-policy boundaries; those come back as blockers
 for the human.
@@ -326,7 +335,9 @@ run in 27 seconds with exit 0:
 
 On the build this ran on, without the no-questions clause the agent would have
 called `ask_user_question` and the run would have sat silent until the shell
-deadline. On 1.26.902 the tool is absent from CLI sessions, so the clause now
+deadline. (The exit 0 above is a 2026-08-31 measurement; current 1.26.1115
+help documents exit 0 only for a completed run, and a run that *reports* a
+blocker is still "completed", so read the answer.) On 1.26.902 the tool is absent from CLI sessions, so the clause now
 prevents a question typed into chat that ends the run unanswered; either way it
 converts a dead end into a clean, informative failure.
 

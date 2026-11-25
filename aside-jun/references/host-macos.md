@@ -58,9 +58,13 @@ $aside = "$HOME/.local/bin/aside"
 
 프롬프트 앞에 `--` 를 넣는다.
 
+CLI 1.26.1115부터 `exec --timeout 5m` 이 내장이다. 기다리기만 멈추고 exit 1, 세션은 계속 돈다.
+perl alarm은 CLI 자체가 멈췄을 때를 위한 바깥 하드 킬로만 남기고 `--timeout` 보다 길게 준다.
+어느 쪽이 발화해도 `aside session inspect <id>` 로 상태를 보고 `session stop` 여부를 정한다.
+
 ```bash
 # macOS / bash
-/usr/bin/perl -e 'alarm shift; exec @ARGV' 300 "$ASIDE" exec --permission full-access -- "$PROMPT"
+/usr/bin/perl -e 'alarm shift; exec @ARGV' 360 "$ASIDE" exec --permission full-access --json --timeout 5m -- "$PROMPT"
 ```
 
 | Property | Measured |

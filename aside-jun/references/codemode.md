@@ -43,11 +43,24 @@ node -p "require('$(dirname "$(dirname "$real")")/package.json').version"
 ```
 
 A `browserContext` object in the result envelope means the #44 routing report
-is present (0.9.1+). A host can hold several installs; on the measured Mac
-(2026-09-25) `~/.local/bin` and nvm resolved to a 0.9.2 checkout while
-`/opt/homebrew/bin/codemode` was 0.9.1. PATH order decides which one a
-non-login shell gets, so pin the absolute path you verified. npm `latest` was
-0.9.2 on that date.
+is present (0.9.1+). A host can hold several installs. PATH order decides which
+one a non-login shell gets, so pin the absolute path you verified.
+
+**Re-check 2026-11-26 (macOS, junui-MacBookPro).** No new release since
+September: npm `dist-tags` is only `latest: 0.9.2` (published 2026-09-22) and
+the newest GitHub release is `v0.9.2`. Issue #44 is closed (2026-09-22).
+Installed copies on this Mac:
+
+| Entry | Resolves to | Version |
+|---|---|---|
+| `~/.local/bin/codemode` (first on login PATH) | shell launcher → nvm Node v24.17.0 + `~/aside-codemode/bin/codemode.mjs` (git checkout, branch `dev` at `0936c1c` = v0.9.2 merge) | 0.9.2 |
+| nvm `lib/node_modules/aside-codemode` | symlink to the same `~/aside-codemode` checkout | 0.9.2 |
+| `/opt/homebrew/bin/codemode` | `/opt/homebrew/lib/node_modules/aside-codemode` (registry install) | 0.9.1 |
+| Aside's own MCP server `aside-codemode` (account u0 settings) | nvm Node + `/opt/homebrew/lib/node_modules/aside-codemode/src/server.js` | 0.9.1 |
+
+So the Aside agent's `execute_code` runs 0.9.1 while a shell `codemode` runs
+0.9.2 on the same Mac. Both still reject `--version` with `EBADARGV`. The
+earlier 2026-09-25 observation recorded the same split.
 
 ## CLI: local search and bounded reads
 
@@ -98,12 +111,19 @@ isolated proofs but is not required for normal configured use. Inspect any
 exit of zero is only transport evidence. Parse the JSON envelope and inspect the
 returned data.
 
+Measured 2026-11-26 with the 0.9.2 launcher (browser not used): a guest calling
+`search.content` and `fs.readMany` on a temp directory returned exit 0 and
+`{"ok":true,"result":{...},"logs":[],"elapsedMs":73,"browserContext":{"account":null,"host":null,"accountSource":"inherited","hostSource":"inherited","explicitAccount":false,"explicitHost":false}}`;
+the search serialized as `{rows, complete, truncated, partial, scope}` with
+`scope.coverage`. A bad flag value returns `{"ok":false,...,"code":"EBADARGV"}`.
+
 ## MCP: use the discovered live schema
 
-At aside-codemode 0.9.0 the MCP input schema is exactly
-`{code: string, timeoutMs?: number}`. There are no per-call `cwd`, `account`, or
-`host` fields. Use absolute guest paths because the server process may have a
-different working directory.
+On 0.9.1+ the MCP input schema is `{code: string, timeoutMs?: number,
+account?: string, host?: string}` (Aside's cached inventory for its 0.9.1 server
+showed exactly these four on 2026-11-26). There is no per-call `cwd` or profile
+field. Historical: 0.9.0 had only `{code, timeoutMs?}`. Use absolute guest paths
+because the server process may have a different working directory.
 
 ```json
 {"code":"return await search.count({path: '/absolute/project', query: 'TODO'});","timeoutMs":30000}
@@ -196,14 +216,20 @@ to prove exhaustive absence. Never update the package automatically.
 
 ## Account, host, and filesystem boundaries
 
-The MCP call has no account or host selector, and codemode's browser runner does
-not pass an explicit `--account` or `--host` to native Aside. Verify the server
-process and selected account context before using browser state or account-owned
-paths. When the task names a nondefault account or remote host and that context is
-not already verified, use native Aside's explicit `--account`/`--host` route
-instead of silently accepting a default profile. Unsupported execution flags being
-silently ignored are tracked in
-[aside-codemode issue #44](https://github.com/lidge-jun/aside-codemode/issues/44).
+On 0.9.1+ codemode passes an explicit `--account` / `--host` to the native
+`aside repl` it spawns (the #44 fix, closed 2026-09-22). Historical: 0.9.0 had no
+MCP selector and silently ignored those CLI flags; on 0.9.0 use native Aside's
+explicit route for any nondefault account or remote host.
+
+**No browser-profile selection (2026-11-26).** Native Aside CLI 1.26.1115 added
+`--profile <PROFILE_ID>` and `--account u0:<PROFILE_ID>`. codemode 0.9.2 does not
+support either: `--account` must match `^u?\d+$` (`--account u0:abc` returns
+`EBADARGV`), there is no `--profile` flag or MCP `profile` field, and the spawned
+`aside repl` therefore uses the account's first (or saved default) profile. When
+a task needs a specific profile, use native `aside repl`/`exec` with `--profile`
+or `--account u0:<PROFILE_ID>` (or the native MCP `profile_id`), not codemode.
+Verify the server process and selected account context before using browser
+state or account-owned paths.
 
 The filesystems are role-specific:
 
@@ -249,6 +275,23 @@ account/host and whether each came from explicit input, config or inherited
 native defaults. It is a routing report, not proof of authenticated browser
 identity. `await browse.context()` exposes the same selection to guest code.
 Inspect real page/account state separately and preserve output-truncation signals.
+
+## `desktop.*` (merged, not released)
+
+[PR #52](https://github.com/lidge-jun/aside-codemode/pull/52) (merged to `main`
+2026-10-16, commit `b395d89`) adds a guest `desktop.*` namespace backed by
+`codex-computer-use-mcp`: `list_apps`, `get_app_state`, `click`, `set_value`,
+`type_text`, `press_key`, `scroll`, `drag`, `select_text`,
+`perform_secondary_action`, `run` (batched steps, stops at first failure), and
+`status`. It is off by default (`config.desktop.enabled`) with an optional
+`disclaimLauncher`. As of 2026-11-26 it is **not in any npm release** (`main`
+is one commit past v0.9.2, package version still 0.9.2) and **not in any
+installed copy on this Mac**: the 0.9.2 checkout is on `dev` at `0936c1c` and the
+0.9.1 registry install predates it; a probe guest saw `typeof desktop ===
+"undefined"`. Check `typeof desktop` or `actions.describe("desktop.run")` before
+using it, and fall back to native Aside `computer` / `aside mcp --computer-use`.
+
+## Local artifacts and remote hosts
 
 Do not use local artifact materialization for an unverified remote/inherited host;
 there is no verified transfer mechanism in this skill. Use explicit `host: "local"`

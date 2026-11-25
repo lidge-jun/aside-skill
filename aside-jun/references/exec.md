@@ -62,23 +62,40 @@ that exact step and stop.
 
 ## Run under a host deadline
 
-On macOS, after resolving the CLI, account, host, mode and prompt:
+Since 1.26.1115 the CLI has its own wait deadline. `--timeout` stops waiting,
+exits 1 and **leaves the Aside session running**; `--json` gives the session id
+for follow-up:
 
 ```bash
-/usr/bin/perl -e 'alarm shift; exec @ARGV' 300 "$ASIDE" \
-  --account "$ASIDE_ACCOUNT" --host "$ASIDE_HOST" \
-  exec --permission "$ASIDE_PERMISSION" -- "$PROMPT"
+"$ASIDE" exec --account "$ASIDE_ACCOUNT" --host "$ASIDE_HOST" \
+  --permission "$ASIDE_PERMISSION" --json --timeout 10m -- "$PROMPT"
+# stdout: {"session":{"id":"..."},"outcome":"completed","answer":"...","error":null}
+```
+
+Keep the perl alarm only as an outer hard kill for a CLI that hangs before it
+can honor `--timeout` (give it a margin above the `--timeout` value):
+
+```bash
+/usr/bin/perl -e 'alarm shift; exec @ARGV' 660 "$ASIDE" \
+  exec --account "$ASIDE_ACCOUNT" --host "$ASIDE_HOST" \
+  --permission "$ASIDE_PERMISSION" --json --timeout 10m -- "$PROMPT"
 ```
 
 Use the Windows wrapper in [host-windows.md](host-windows.md) on Windows; a bare
 `timeout` there sleeps rather than wrapping a process. The historical wrappers
-use exit 142 for their deadline. The number 300 is an example duration, not a
-universal task budget. A deadline ending the CLI does not undo work already done
-or prove the remote agent stopped.
+use exit 142 for their deadline; native `--timeout` uses exit 1. Durations are
+examples, not a universal task budget. Neither deadline undoes work already done
+or stops the agent: after either one, run `aside session inspect <id>` and decide
+between waiting, `steer`, and `session stop <id>`.
 
-Options on 1.26.906: `-m provider/model`, `-p`, `-s fast`, and `--effort`
-(`off` … `max`, plus `ultrabrowse` for proactive browsing at the highest
-thinking level). `--permission ask` and `guard` are the same mode.
+Options on 1.26.1115: `-m provider/model`, `-p`, `-s fast`, `--effort`
+(`off` … `max`, plus `ultrabrowse`), `--permission ask|guard|full-access`
+(`ask` = `guard`, the default), `--account u0[:<PROFILE_ID>]`, `--profile`,
+`--host`, `--incognito`, `--json`, `--timeout`. A bare URL prompt
+(`aside https://...`) just opens that page in the user's browser.
+`--incognito` has no Vault access, so do not combine it with a delegated sign-in.
+Aside's guide asks callers to give the user a status update about every 60
+seconds while an exec run is in flight.
 
 Use the caller's managed background execution where available, capture its
 process handle, and poll that handle with bounded waits. Keep it separate from
@@ -96,35 +113,50 @@ aside session queue <id> "After this step, report the output paths"
 aside session stop <id>
 ```
 
-Reapply the intended account/host using the installed CLI's supported global
-options. Omitting the resume prompt opens an interactive shell, so unattended
-calls must supply it. `steer` interrupts the current step; `queue` waits for it.
+`aside session inspect <id>` shows a session's status and latest answer without
+resuming it; use it after a timeout or before any retry. `resume` also takes
+`--json` and `--timeout`.
+
+Reapply the intended account/host with `--account` / `--host` on the session
+subcommand. `list`, `inspect`, `stop`, `archive` and `resume` support remote
+hosts; `steer`, `queue` and `delete` reject non-local hosts (pass `--host local`
+explicitly when the default host is remote). Omitting the resume prompt opens an
+interactive shell, so unattended calls must supply it. `steer` interrupts the
+current step; `queue` waits for it; both print a receipt and exit.
 Do not use the obsolete `--session` example still present on some web pages.
 `aside session list` shows sessions including unsaved ones; `archive` and
-`delete` tidy up. Delete only sessions this task created (for example the
-failed runs of a mistaken invocation), never the user's other sessions.
+`delete <id> --yes` tidy up. Delete only sessions this task created (for example
+probe runs or failed runs of a mistaken invocation), never the user's other
+sessions.
 
-`aside host list` and `aside host status` are read-only inspection. `aside host
-use <host>` and `aside settings set-default-profile <id>` change defaults for
-every later command; run them only when the user asks, and prefer one-shot
-`--host` / `--account`.
+`aside host list`, `host status`, `host profiles` and `account status` are
+read-only inspection. `aside host use <host>` and `aside account use <id>`
+(which replaced `settings set-default-profile`) change defaults for every later
+command; run them only when the user asks, and prefer one-shot `--host` /
+`--account`.
 Inspect current help before using any model override or undocumented logging flag
 on resume. Logs can contain private browser content.
 
-`aside settings save-sessions true` exposes later CLI sessions in the chat list;
-it is an optional settings change, not routine preflight. The 15-minute purge
+`aside settings save-sessions enable` (help syntax; the guide's `true` is stale)
+exposes later CLI sessions in the chat list; it is an optional settings change,
+not routine preflight. Check the current value with `aside settings get`
+(`saveSessions`). The 15-minute purge
 observed on 1.26.902 is historical, not a current guaranteed retention SLA. Keep
 long-running task checkpoints in authorized files and see [scheduling](scheduling.md)
 when the user actually requests recurrence.
 
 ## Verify the outcome before retrying
 
-Aside CLI has historically exited zero for denied file tools and REPL failures.
-On 1.26.906 (2026-09-25) `aside exec` also exited 0 when the model provider
-returned 403 (quota exhausted); the output was `created new session: <id>`
-followed by a ` • Error 403: …` line and no report. Treat an ` • Error` line or a
-missing report as failure; an auth/other provider error exit code is not
-measured. A provider failure is a reason to report or to retry with an explicit
+On 1.26.1115 (2026-11-26) the CLI documents exit 0 = run completed, 1 = failed or
+`--timeout` passed, 2 = invalid usage, and `repl` throws exit 1 (measured). With
+`--json`, require `outcome: "completed"` and `error: null`; "completed" still
+only means the agent finished, not that the site accepted the action.
+Historical: up to 1.26.906 the CLI exited zero for denied file tools, REPL
+failures and a provider 403 (`created new session: <id>` then ` • Error 403: …`
+and no report). The provider-error exit code has not been re-measured on 1115,
+so still treat an ` • Error` line, a non-null `error` or a missing answer as
+failure. A guard file denial inside a run is a step the agent skips, not a
+process failure. A provider failure is a reason to report or to retry with an explicit
 `-m provider/model` the user already uses, not to change settings.
 Read the report, denied/failed steps and actual destination state. For files,
 check existence, nonempty contents and the requested format; for browser work,

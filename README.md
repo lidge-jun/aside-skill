@@ -49,13 +49,28 @@ different runtime: codemode guest globals are available only inside codemode.
 
 ## Install the skill
 
+Verified against Aside CLI 1.26.1115.1556 (2026-11-26).
+
 Only `aside-jun/` is installed. `devlog/` contains the source investigation and
 verification records. Clone this repository, then copy the directory contents to
-the chosen agent's skill directory:
+each agent's skill directory you use: `~/.codex/skills/aside-jun`,
+`~/.claude/skills/aside-jun`, `~/.cursor/skills/aside-jun`.
 
 ```bash
 git clone https://github.com/lidge-jun/aside-skill.git
+for dest in "${CODEX_HOME:-$HOME/.codex}/skills/aside-jun" \
+            "$HOME/.claude/skills/aside-jun" "$HOME/.cursor/skills/aside-jun"; do
+  mkdir -p "$dest" && cp -R aside-skill/aside-jun/. "$dest/"
+done
 ```
+
+Aside's official `aside skills install` writes a separate `aside-browser` skill
+(v5, an entry point that defers to `aside guide`) into Codex, Claude Code, Cursor,
+OpenCode and others. It coexists with `aside-jun` under a different name, but its
+description claims priority for all browser work, so it can shadow this skill's
+routing. Run it only when you want the official entry point too.
+
+Per-agent forms follow.
 
 ### Codex
 
@@ -96,6 +111,10 @@ Get-Item -LiteralPath (Join-Path $skillDest 'SKILL.md')
 Copying replaces matching files; back up user-edited skill files before an update.
 Reload the skill in the agent before checking the new routing behavior. This task's
 repository changes do not automatically update installed copies.
+
+### Cursor
+
+Same as Claude Code with `skill_dest="$HOME/.cursor/skills/aside-jun"`.
 
 ### Other agents
 

@@ -66,12 +66,19 @@ Do not ask questions in this unattended run. If an essential input, skill, forma
 Run it with the selected context rather than a default profile:
 
 ```bash
-ASIDE_CONTEXT=(--account "$ASIDE_ACCOUNT" --host "$ASIDE_HOST")
-/usr/bin/perl -e 'alarm shift; exec @ARGV' 300 "$ASIDE" \
-  "${ASIDE_CONTEXT[@]}" exec --permission "$ASIDE_PERMISSION" -- "$PROMPT"
+ASIDE_CONTEXT=(--account "$ASIDE_ACCOUNT" --host "$ASIDE_HOST")   # account may be u0:<PROFILE_ID>
+/usr/bin/perl -e 'alarm shift; exec @ARGV' 660 "$ASIDE" \
+  exec "${ASIDE_CONTEXT[@]}" --permission "$ASIDE_PERMISSION" \
+  --json --timeout 10m -- "$PROMPT"
+# stdout: {"session":{"id":...},"outcome":"completed","answer":...,"error":null}
 ```
 
-That is the macOS deadline form; use the Windows wrapper linked from
+Since CLI 1.26.1115 `--timeout` is the primary deadline (exit 1, session keeps
+running; check it with `aside session inspect <id>` and `session stop <id>` if
+needed) and `--json` carries the session id and answer; the perl alarm is only an
+outer hard kill. Require `outcome:"completed"` and `error:null`, then still
+verify the artifact paths the answer names. Do not add `--incognito`: it has no
+Vault access. Use the Windows wrapper linked from
 [exec delegation](exec.md) on Windows. Choose permission from the task's existing
 authorization. The example duration and permission variable are not visualizer
 flags or new authority.

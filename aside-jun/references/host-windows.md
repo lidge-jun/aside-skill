@@ -111,7 +111,35 @@ ASIDE=$(command -v aside 2>/dev/null || true)
 ```
 
 `Get-Command aside` 또는 `command -v aside`가 실패할 때만 아래의 2026-09-11
-junction 관찰과 버전 디렉터리 fallback을 적용한다. 공식 설치 및 PATH 문서:
+junction 관찰과 버전 디렉터리 fallback을 적용한다.
+
+## 2026-11-26 재측정 (desktop-c795oh4)
+
+측정 호스트는 `desktop-c795oh4` (Windows 10.0.26200, 사용자 `user`, Git Bash MINGW64 로 SSH).
+기존 기록의 `MINI` (`C:\Users\super`) 와 다른 기계다. Mac 의 `aside host list` 에서 MINI 는 `disabled` 였다.
+
+| 항목 | 결과 |
+|---|---|
+| `aside --version` | **`1.26.906.1630`**. macOS 는 `1.26.1115.1556`. 업데이트하지 않았다 |
+| 이름 해석 | `command -v aside` → `/c/Users/user/AppData/Local/Aside/CLI/current/aside` (PATH 정상) |
+| junction | `current [\??\C:\Users\user\AppData\Local\Aside\CLI\versions\1.26.906.1630]` (2026-09-16 생성). print name 은 여전히 `\??\` 형식인데 Git Bash 에서는 해석됐다 |
+| Aside 앱·데몬 | `Aside.exe`, `aside-daemon.exe` 둘 다 실행 중 아님 |
+| repl throw / ReferenceError / 루트 이탈 / `--json` | 전부 코드 실행 전에 `Failed to request daemon auth challenge: fetch failed` + `Aside isn't running on this machine.` 으로 **exit 1**. 실행 중 실패 코드는 측정 불가 |
+| `exec --json --timeout` 프로브 | 실행하지 않음. 데몬이 없고, 906 에는 `--json`·`--timeout` 이 없다 |
+| `settings get` | `error: unknown command 'get'` |
+
+906 Windows 도움말과 1115 macOS 도움말의 차이 (설치본이 오래돼서다, OS 차이가 아니다):
+
+- 906 에 **없는 것**: `--json`, `--timeout`, `--incognito`, `--profile`, `--account u0:<PROFILE_ID>`,
+  `--host remote`, `session inspect`, `host profiles`, `settings get`/`computer-use`/`analytics`,
+  exit 0/1/2 계약 문구.
+- 906 에만 **있는 것**: `settings set-default-profile <id>`, `save-sessions true|false` (1115 는 `enable|disable`),
+  `account use` 는 "default Aside CLI account" 만 바꾼다 (1115 는 계정+브라우저 프로필).
+- 공통: `session list/resume/stop/steer/queue/archive/delete`, `account list/status/use`, `host list/use/status`.
+
+그래서 이 Windows 호스트에서는 1115 문법을 쓰지 말고 `--version` 을 먼저 보고 906 문법으로 부른다.
+업데이트 (`aside update`) 와 앱 기동 (아래 schtasks 우회) 은 사용자가 요청할 때만 한다.
+Aside 가 꺼진 Windows 에서 CLI 는 이제 exit 1 로 즉시 실패하므로, 데몬 미기동은 종료코드로 구분된다. 공식 설치 및 PATH 문서:
 [Use the CLI, MCP, and REPL](https://docs.aside.com/help/developers).
 
 ## CLI 해석과 junction 결함 (2026-09-11 관찰)
@@ -382,7 +410,10 @@ Windows에서 `pwd` 는 역슬래시 문자열이다.
 
 호출마다 새 세션 디렉터리가 생긴다. 상대 artifacts는 호출 간에 보존되지 않는다.
 `process` 전역은 없다. `fs.readFile` 은 Buffer를 반환한다.
-실패는 끝줄 `[error | Nms]` / `[ok | Nms]` 마커로 판정한다. exit code는 0으로 남는다.
+실패는 끝줄 `[error | Nms]` / `[ok | Nms]` 마커로 판정한다. exit code는 0으로 남는다 (2026-09-11 MINI, 1.26.906 실측, 역사 기록).
+macOS 1.26.1115 에서는 throw·ReferenceError·루트 이탈이 exit 1 이고 `--json` 이 생겼다.
+2026-11-26 desktop-c795oh4 도 아직 906 이고 Aside 가 꺼져 있어 실행 중 실패 코드는 재측정하지 못했다.
+Windows 에서는 버전이 1115 이상으로 확인되기 전까지 마커 판정을 유지한다.
 
 ```
 ReferenceError: process is not defined
@@ -404,6 +435,8 @@ ReferenceError: process is not defined
 `artifacts\` 와 `messages.jsonl` 이 형제다.
 
 ## 종료코드는 성공 신호가 아니다
+
+> 역사 기록: 2026-09-11 MINI, 1.26.906 측정이다. 1.26.1115 CLI 도움말은 exec 0=완료 / 1=실패·`--timeout` / 2=사용법 오류를 문서화하고, macOS 에서 repl throw 가 exit 1 로 확인됐다 (2026-11-26). 같은 날 Windows `desktop-c795oh4` 는 아직 906 이었고, 확인된 것은 "Aside 미실행 → exit 1" 하나뿐이다. Windows 가 1115 이상으로 올라가 재측정하기 전까지 아래 판정법을 그대로 쓴다.
 
 측정한 실패 모드가 전부 exit 0이었다. guard 파일 거부, repl `ReferenceError`,
 repl 루트 이탈. 0이 아닌 값은 commander가 argv를 거부한 `1` 뿐이었다.

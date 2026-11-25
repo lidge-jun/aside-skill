@@ -14,13 +14,18 @@ or an installer. The user's chosen tools, scope and permissions remain decisive.
 
 | Work | Route | Read |
 |---|---|---|
-| Any Aside work when this caller's live tool list shows the native Aside MCP (`aside mcp`: `exec`, `repl`, often `memory_search`) | Call those tools instead of shelling out to the CLI; the REPL/exec rules below still apply | [Delegation](references/exec.md), [REPL](references/repl-api.md) |
+| Any Aside work when this caller's live tool list shows the native Aside MCP (`aside mcp`: `exec`, `repl`, `memory_search`, `browser_profiles` on 1.26.1115) | Call those tools instead of shelling out to the CLI; pass `profile_id` from `browser_profiles` to a new `exec`/`repl` when the account has several profiles, omit it when continuing with `session_id`. The REPL/exec rules below still apply | [Delegation](references/exec.md), [REPL](references/repl-api.md) |
 | Directory/project search within an explicitly requested Aside/code-mode workflow; 2+ independent known files, URLs, queries or captures | **Direct aside-codemode** through a tool exposed to this caller, otherwise the installed CLI | [Code-mode calls](references/codemode.md) |
 | First look at an unfamiliar page; one visible click; a dependent form/wizard step | Native Aside REPL, inspect → act → inspect | [REPL](references/repl-api.md) |
 | Current/already-open tab | Identify and attach the existing tab; never replace it with a fresh URL batch | [REPL](references/repl-api.md); verified codemode `browse.attach` is also available |
 | Login, MFA, account change, approval, or a browser task needing judgment | Aside `exec` — it signs in by itself; hand it the login first. Within the task's existing authorization; stop when a human gesture is required | [Delegation](references/exec.md), [credentials](references/credentials.md) |
 | Composed HTML/SVG report, visual explanation or PDF through Aside | `exec` using the selected Aside account's **dev-visualizer** skill; codemode may collect inputs first | [Visualizer handoff](references/visualizer.md) |
 | A public page that only needs HTTP, or unrelated local coding work | The host's existing reader/search/file tools, unless the user explicitly selected Aside/code mode | No Aside setup needed |
+
+Aside's own guide (`aside guide`, skill v5) recommends `exec` for most browser
+tasks and `repl` only when you must inspect DOM/screenshots directly. This skill
+keeps codemode/REPL for known mechanical batches, but when the route is unclear,
+prefer `exec`: it carries the user's skills, memory and sign-in handling.
 
 Independent means one item's result is not needed to choose the next item's
 operation. Do not turn a login flow, cart, wizard or uncertain side effect into a
@@ -80,14 +85,37 @@ For browser work, inspect `aside --version`, relevant `--help`, and
 and host; derive absolute paths from that account instead of copying `u0` from an
 example. Never print account credential files.
 
+Current selectors (verified on CLI 1.26.1115.1556, 2026-11-26):
+
+- `--account u0` uses that account's first browser profile; `--account u0:<PROFILE_ID>`
+  or `--profile <PROFILE_ID>` picks another. List IDs with
+  `aside host profiles [--host <h>] --json`. Saved local profile IDs do not apply to
+  remote hosts; existing sessions keep their original profile.
+- `--host local | remote | <host-id> | <full device name>`. `remote` works only when
+  exactly one remote host is registered. `aside host list` / `host status` /
+  `account status` are read-only.
+- `aside account use <id>` and `aside host use <host>` change defaults for every
+  later command. Run them only when the user asks; prefer one-shot flags.
+  (`settings set-default-profile` from 1.26.906 is gone; `aside guide` still
+  mentions it, but current `--help` wins.)
+- A host without a local Aside needs `aside login` (device code by default) or
+  `ASIDE_API_TOKEN`. Remote control must be enabled on the target in Settings >
+  Developers and the device must be online.
+
 For personal context (people, projects, preferences) query Aside memory before
 asking the user: `aside memory search "<q>" --json`, `list`, `show <path>`, or
 the attached `memory_search` tool. It is read-only; never edit memory files, and
 route "remember this" through exec.
 
 Codemode's browser runner inherits native `aside repl` defaults unless the
-installed build supports explicit context. npm `latest` is 0.9.2, which adds
-CLI `--account`/`--host` and per-call MCP `account`/`host`; 0.9.0 has neither.
+installed build supports explicit context. As of 2026-11-26 npm `latest` is
+still 0.9.2; 0.9.1+ adds CLI `--account`/`--host` and per-call MCP
+`account`/`host`, 0.9.0 has neither. On the measured Mac a shell `codemode`
+resolved to 0.9.2 while Aside's own codemode MCP server ran 0.9.1. codemode
+accepts only `u<N>` accounts (no `--profile`, no `u0:<PROFILE_ID>`), so use
+native `aside --profile` / `--account u0:<ID>` (or MCP `profile_id`) when a
+profile matters. `desktop.*` (PR #52) is merged on `main` but unreleased; check
+`typeof desktop` before relying on it.
 `codemode` has no `--version`, so identify the build by
 [resolving its package](references/codemode.md#identify-the-installed-version)
 and check the live schema. When the verified build cannot pin a required
@@ -112,6 +140,10 @@ and measured behavior take precedence over stale examples. See the dated
 - Permission mode changes capability, not user authorization. Do not widen roots,
   enable browsing, disable biometrics or change persistence settings as a fallback
   to a denied operation. Use the authorized scope or report what is blocked.
+- Do not rely on Guard as a fence. On 1.26.1115 (2026-11-26) a default-mode
+  `exec` read `/etc/hosts` and wrote under `/tmp` with exit 0 even though the
+  account's outside-root policy was `ask`. The prompt's path clause and your own
+  post-run check are the boundary; see [permissions](references/permissions.md).
 - Before native REPL, read `aside guide repl` and the relevant installed builtin
   skill via `aside skills list/show`. Do not assume the builtin catalog includes
   account-installed user skills such as dev-visualizer.
@@ -128,10 +160,27 @@ and measured behavior take precedence over stale examples. See the dated
   a subcommand becomes an agent prompt: `aside version`, or `"account list"` as
   one quoted word under zsh, starts a paid exec session. Call agent runs
   explicitly as `aside exec -- "<prompt>"`.
-- Exit 0 is not success: REPL errors end in `[error | Nms]`, and exec printed
-  ` • Error 403` (provider quota) with exit 0 on 1.26.906. Read the output.
-- Run `aside skills install` only when the user asks; it installs the official
-  aside-browser skill into coding agents, which shadows this one.
+- Exit codes are meaningful again on 1.26.1115 (measured 2026-11-26): `exec`
+  exits 0 when the run completes, 1 when it fails or `--timeout` passes, 2 for
+  invalid usage; `repl` exits 1 on a throw, `ReferenceError` or root escape. Still
+  read the result: prefer `--json` (`exec` → `{session:{id},outcome,answer,error}`,
+  `repl` → `{run:{content,error,elapsedMs}}`) and require `outcome:"completed"` /
+  `error:null`. The 1.26.906 "` • Error 403` with exit 0" case is historical and
+  not re-measured.
+- Only the answer goes to stdout; the session id, thinking and tool calls go to
+  stderr. Take the session id from `--json` instead of scraping stderr.
+- `--timeout 10m` stops *waiting*, exits 1, and **leaves the session running**.
+  After a timeout, `aside session inspect <id>` and either wait, `steer`, or
+  `session stop <id>`; never relaunch the same prompt blindly.
+- `--incognito` keeps a task private but has no Vault access; CLI `repl` sessions
+  are always incognito, so `imessage`/SMS-code skills only work inside `exec`.
+- Do not run `aside settings ...` changes (`save-sessions`, `computer-use`,
+  `analytics`) as preflight. `aside settings get` is the read-only check. Current
+  help uses `enable`/`disable`; `aside guide`'s `save-sessions true` is stale.
+- Run `aside skills install` only when the user asks. It now writes the official
+  `aside-browser` skill (v5, which tells agents to prefer Aside over every other
+  browser tool and to read `aside guide`) into Codex, Claude Code, Cursor,
+  OpenCode and others (`--target`, `--path`); it shadows this one.
 - Verify actual content and artifacts before reporting completion. A local path
   returned by a remote Aside host is not yet a file delivered to this caller.
 

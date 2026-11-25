@@ -30,13 +30,15 @@ if [ ! -d "$BUILTIN_DIR" ]; then
   exit 1
 fi
 
-# Measured 2026-09-11: the Windows tree has no apple-passwords, imessage, or
-# context-awareness. Nested site-specific/ skills are present on both.
-# Names stay labelled even when the scanned tree is one OS, so PLATFORM is stable.
+# Platform labels are historical. Measured 2026-09-11 (Windows CLI 1.26.906): the
+# Windows tree had no apple-passwords, imessage, or context-awareness, and had every
+# other name in WIN_906 below. Names not in either list appeared later and have not
+# been measured on Windows, so they are labelled "unmeasured" rather than guessed.
+WIN_906=" 1password aside bitwarden captcha-solver channel chrome dashlane docx draft-preview google-accounts google-docs google-gmail google-search google-sheets image-search imagegen kakaotalk lastpass notification-activation notion onboarding password-manager pdf pptx proton-pass skill-creator slack visual-browse x-twitter xlsx youtube airtable amazon asana clickup confluence discord github google-calendar google-drive google-forms google-slides jira linear linkedin trello "
 platform_of() {
   case "$1" in
     apple-passwords|imessage|context-awareness) printf '%s\n' "macOS" ;;
-    *) printf '%s\n' "both" ;;
+    *) if [[ "$WIN_906" == *" $1 "* ]]; then printf '%s\n' "both"; else printf '%s\n' "unmeasured"; fi ;;
   esac
 }
 
@@ -47,11 +49,36 @@ desc_of() {
 # A skill is repl-backed when a JS global of the same shape exists in the repl scope.
 REPL_BACKED=" chrome twitter x-twitter gmail google-gmail google-accounts google-docs google-sheets google-search notion slack linkedin youtube image-search imagegen apple-passwords captcha-solver aside "
 
-# `aside skills list` (1.26.902+) prints a name<TAB>description subset. It is not the
-# repl-backed set, so it gets its own column. Names are lowercased; the CLI lists
-# the iMessage skill as "Messages" while its builtin directory is "imessage".
-CLI_LISTED=" $(aside skills list 2>/dev/null | awk -F'\t' 'NF>=2{n=tolower($1); if(n=="messages") n="imessage"; print n}' | tr '\n' ' ') "
-CLI_VERSION="$(aside --version 2>/dev/null || echo unknown)"
+# Resolve the CLI without relying on a login PATH (non-login shells miss ~/.local/bin).
+ASIDE="${ASIDE:-$(command -v aside 2>/dev/null || true)}"
+[ -z "$ASIDE" ] && [ -x "$HOME/.local/bin/aside" ] && ASIDE="$HOME/.local/bin/aside"
+[ -z "$ASIDE" ] && ASIDE=aside
+export NO_UPDATE_NOTIFIER=1
+
+# `aside skills list` prints a subset of the tree. It is not the repl-backed set, so it
+# gets its own column. 1.26.1115 supports `--json` ([{name,description}]); older builds
+# print name<TAB>description, and 1.26.1115's text form adds a NAME/DESCRIPTION header
+# and a trailing "Read a skill before using it" line, so the text fallback skips both.
+# Names are lowercased; 1.26.906 listed the iMessage skill as "Messages" while its
+# builtin directory is "imessage".
+cli_listed_names() {
+  local json
+  if json=$("$ASIDE" skills list --json 2>/dev/null) && [ "${json:0:1}" = "[" ]; then
+    printf '%s' "$json" | python3 -c 'import json,sys; [print(s["name"]) for s in json.load(sys.stdin)]' 2>/dev/null && return
+  fi
+  "$ASIDE" skills list 2>/dev/null | awk -F'\t' 'NF>=2 && $1!="NAME"{print $1}'
+}
+CLI_LISTED=" $(cli_listed_names | awk '{n=tolower($0); if(n=="messages") n="imessage"; print n}' | tr '\n' ' ') "
+CLI_COUNT=$(printf '%s' "$CLI_LISTED" | wc -w | tr -d ' ')
+CLI_VERSION="$("$ASIDE" --version 2>/dev/null || echo unknown)"
+
+# Hand-written dated notes live between these markers and survive regeneration.
+NOTES_START='<!-- manual-notes:start -->'
+NOTES_END='<!-- manual-notes:end -->'
+MANUAL_NOTES=""
+if [ -f "$OUT" ]; then
+  MANUAL_NOTES=$(awk -v s="$NOTES_START" -v e="$NOTES_END" '$0==s{f=1;next} $0==e{f=0} f' "$OUT")
+fi
 HOST_OS="$(uname -s)"
 
 listed_of() {
@@ -94,6 +121,12 @@ fi
   echo "Pass the account root as argument 1; the default is per-OS, not a macOS path."
   echo "Aside owns these and ships updates with the app; re-run the script after an Aside update."
   echo
+  echo "$NOTES_START"
+  [ -n "$MANUAL_NOTES" ] && printf '%s\n' "$MANUAL_NOTES"
+  echo "$NOTES_END"
+  echo
+  echo "\`aside skills list\` printed $CLI_COUNT names on this run."
+  echo
   echo "\`aside exec\` loads them on its own when the prompt names one. Codex can read any skill"
   echo "body with \`aside skills show <name>\`; \`aside skills list\` prints the subset marked"
   echo "\`CLI listed\` below."
@@ -107,9 +140,10 @@ fi
   echo "The \`Backing\` column says how the skill works. A \`repl global\` skill documents a JavaScript"
   echo "object you can also drive yourself from \`aside repl\`; several of those reach an API and never"
   echo "open a tab. An \`instructions\` skill is guidance for the agent with no matching global."
-  echo "The \`Platform\` column is \`macOS\` for names measured absent on Windows"
-  echo "(\`apple-passwords\`, \`imessage\`, \`context-awareness\`) and \`both\` otherwise. Nested"
-  echo "\`site-specific/\` skills are present on both platforms."
+  echo "The \`Platform\` column is historical (Windows CLI 1.26.906 tree, 2026-09-11): \`macOS\`"
+  echo "for names measured absent there (\`apple-passwords\`, \`imessage\`, \`context-awareness\`),"
+  echo "\`both\` for names present in both trees then, and \`unmeasured\` for names that"
+  echo "appeared later and were not checked on Windows."
   echo
   echo "## Top-level"
   echo
@@ -120,7 +154,7 @@ fi
   echo "## Site-specific"
   echo
   echo "Nested under \`site-specific/\`. The container directory has no SKILL.md and is not itself"
-  echo "loadable; name the individual site skill instead. Present on macOS and Windows."
+  echo "loadable; name the individual site skill instead."
   echo
   echo "| Skill | Backing | CLI listed | Platform | Purpose |"
   echo "|---|---|---|---|---|"
